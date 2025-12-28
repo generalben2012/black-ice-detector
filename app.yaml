@@ -1,0 +1,7 @@
+name: Black Ice Detector
+description: Detect black ice using HC-SR04 ultrasonic sensor and display on web interface
+ports: []
+bricks:
+- arduino:web_ui: {}
+icon: 🧊
+

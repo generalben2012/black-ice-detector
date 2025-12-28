@@ -1,0 +1,115 @@
+// SPDX-FileCopyrightText: Copyright (C) ARDUINO SRL (http://www.arduino.cc)
+//
+// SPDX-License-Identifier: MPL-2.0
+
+#include <Arduino_RouterBridge.h>
+
+// HC-SR04 Ultrasonic Sensor Pin Configuration
+// VCC -> 5V
+// GND -> GND
+// Trig -> D2 (Trigger pin)
+// Echo -> D3 (Echo pin)
+const int TRIG_PIN = 2;
+const int ECHO_PIN = 3;
+
+// Speed of sound in cm/us (at 20°C)
+const float SOUND_SPEED = 0.034;
+
+// Maximum distance to measure (in cm)
+const float MAX_DISTANCE = 400.0;
+
+// Minimum distance to measure (in cm)
+const float MIN_DISTANCE = 0.1;
+
+void setup() {
+    Serial.begin(9600);
+    
+    // Configure pins
+    pinMode(TRIG_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
+    
+    // Initialize trigger pin to LOW
+    digitalWrite(TRIG_PIN, LOW);
+    
+    Bridge.begin();
+    
+    // Provide function to Python backend
+    Bridge.provide("get_distance", get_distance);
+    
+    Serial.println("Black Ice Detector initialized");
+}
+
+void loop() {
+    // Main loop is handled by Bridge
+    delay(100);
+}
+
+// Custom pulseIn implementation for Zephyr platform
+// Measures the duration of a pulse on a pin
+unsigned long pulseInCustom(uint8_t pin, uint8_t state, unsigned long timeout) {
+    unsigned long startMicros = micros();
+    unsigned long timeoutMicros = timeout;
+    
+    // Wait for the pin to be in the opposite state first
+    while (digitalRead(pin) == state) {
+        if (micros() - startMicros > timeoutMicros) {
+            return 0; // Timeout
+        }
+    }
+    
+    // Wait for the pin to go to the desired state
+    while (digitalRead(pin) != state) {
+        if (micros() - startMicros > timeoutMicros) {
+            return 0; // Timeout
+        }
+    }
+    
+    // Now measure the pulse duration
+    unsigned long pulseStart = micros();
+    while (digitalRead(pin) == state) {
+        if (micros() - pulseStart > timeoutMicros) {
+            return 0; // Timeout
+        }
+    }
+    
+    return micros() - pulseStart;
+}
+
+// Function to measure distance using HC-SR04
+float get_distance() {
+    // Clear the trigger pin
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    
+    // Send 10 microsecond pulse to trigger pin
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
+    
+    // Wait a bit for the echo to start
+    delayMicroseconds(50);
+    
+    // Read the echo pin, returns the sound wave travel time in microseconds
+    unsigned long duration = pulseInCustom(ECHO_PIN, HIGH, 30000); // Timeout after 30ms (max ~5m)
+    
+    // Calculate distance
+    // Distance = (Time * Speed of sound) / 2
+    // Divide by 2 because sound travels to object and back
+    float distance = (duration * SOUND_SPEED) / 2.0;
+    
+    // Debug output (can be removed later)
+    Serial.print("Duration: ");
+    Serial.print(duration);
+    Serial.print(" us, Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+    
+    // Validate distance reading
+    if (distance < MIN_DISTANCE || distance > MAX_DISTANCE || duration == 0) {
+        Serial.println("Invalid reading - out of range or timeout");
+        return -1.0; // Invalid reading
+    }
+    
+    return distance;
+}
+

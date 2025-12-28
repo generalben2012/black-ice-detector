@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Ice Detector</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <link rel="icon" type="image/png" href="img/favicon.png">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="arduino-text">Black Ice Detector</h1>
+            <img class="arduino-logo" src="img/logo.svg" alt="Arduino Logo" style="display: none;">
+        </div>
+
+        <div class="main-content">
+            <div class="distance-display-container">
+                <div class="distance-card">
+                    <div class="distance-label">거리 (Distance)</div>
+                    <div class="distance-value" id="distanceValue">---</div>
+                    <div class="distance-unit">cm</div>
+                    <div class="distance-status" id="distanceStatus">
+                        <span class="status-indicator" id="statusIndicator"></span>
+                        <span id="statusText">센서 연결 중...</span>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>센서 정보</h3>
+                    <div class="info-item">
+                        <span class="info-label">센서 모델:</span>
+                        <span class="info-value">HC-SR04</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">측정 범위:</span>
+                        <span class="info-value">2cm ~ 400cm</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">업데이트 주기:</span>
+                        <span class="info-value">100ms (10회/초)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorContainer" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script src="libs/socket.io.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
