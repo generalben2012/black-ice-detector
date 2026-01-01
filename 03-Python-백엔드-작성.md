@@ -1,12 +1,12 @@
 # 3단계: Python 백엔드 작성
 
-이 문서는 Arduino Bridge를 통해 거리 값을 읽고 웹 클라이언트에 전송하는 Python 백엔드를 작성하는 방법을 설명합니다.
+이 문서는 Arduino Bridge를 통해 센서 값을 읽고 웹 클라이언트에 전송하는 Python 백엔드를 작성하는 방법을 설명합니다.
 
 ## 목표
 
-- Arduino Bridge를 통해 거리 값을 읽기
-- WebSocket을 사용하여 웹 클라이언트에 실시간으로 거리 값 전송
-- 주기적으로 거리 값을 업데이트
+- Arduino Bridge를 통해 거리 값과 조도 값을 읽기
+- WebSocket을 사용하여 웹 클라이언트에 실시간으로 센서 값 전송
+- 주기적으로 센서 값을 업데이트
 
 ## Arduino Bridge란?
 
@@ -39,17 +39,34 @@ ui = WebUI()
 UPDATE_INTERVAL = 0.1  # Update every 100ms (10 readings per second)
 last_update_time = 0.0
 
-def get_distance_from_sensor():
-    """Get distance measurement from Arduino sensor via Bridge"""
+print("Python backend starting...")
+print("WebUI initialized")
+
+def get_sensor_data():
+    """Get duration, distance_mm, and ldr_value from Arduino sensor via Bridge"""
     try:
-        result = Bridge.call("get_distance").result()
-        if result is not None:
-            distance = float(result)
-            return distance
+        # Bridge.call() with shorter timeout (1 second - 더 빠른 응답)
+        duration = Bridge.call("get_duration", timeout=1)
+        distance_mm = Bridge.call("get_distance_mm", timeout=1)
+        ldr_value = Bridge.call("get_ldr_value", timeout=1)
+        
+        if duration is not None and distance_mm is not None and ldr_value is not None:
+            return {
+                "duration": int(duration),
+                "distance_mm": float(distance_mm),
+                "ldr_value": int(ldr_value)
+            }
+        else:
+            # 조용히 처리 (로그 스팸 방지)
+            return None
+    except TimeoutError:
+        # Bridge 통신 타임아웃 - 조용히 처리
         return None
     except Exception as e:
-        print(f"Error reading distance: {e}")
+        # 심각한 오류만 출력
+        print(f"❌ Error reading sensor data: {e}")
         return None
+
 
 def send_distance_update():
     """Send distance update to all connected clients"""
@@ -59,38 +76,71 @@ def send_distance_update():
     
     # Check if enough time has passed since last update
     if current_time - last_update_time >= UPDATE_INTERVAL:
-        distance = get_distance_from_sensor()
+        sensor_data = get_sensor_data()
         
-        if distance is not None:
-            # Prepare message with distance and timestamp
+        # Always send message, even if sensor data is invalid
+        if sensor_data is not None:
+            # Prepare message with distance, duration, distance_mm, ldr_value
+            distance_mm = sensor_data["distance_mm"]
+            distance_cm = distance_mm / 10.0  # mm to cm
             message = {
-                "distance": distance,
+                "distance": distance_cm,
+                "duration": sensor_data["duration"],
+                "distance_mm": distance_mm,
+                "ldr_value": sensor_data["ldr_value"],
                 "timestamp": datetime.now(UTC).isoformat(),
                 "unit": "cm",
-                "valid": distance > 0
+                "valid": distance_cm > 0 and sensor_data["duration"] > 0
             }
             
             # Send to all connected clients
             ui.send_message("distance_update", message)
-            
-            # Print to console for debugging
-            if distance > 0:
-                print(f"Distance: {distance:.2f} cm")
-            else:
-                print("Invalid distance reading")
+        else:
+            # Send error message if sensor reading failed
+            message = {
+                "distance": -1.0,
+                "duration": -1,
+                "distance_mm": -1.0,
+                "ldr_value": -1,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "unit": "cm",
+                "valid": False
+            }
+            ui.send_message("distance_update", message)
         
         last_update_time = current_time
 
 def on_client_connected(client_id, data):
     """Send initial distance reading when client connects"""
-    distance = get_distance_from_sensor()
-    if distance is not None:
-        ui.send_message("distance_update", {
-            "distance": distance,
+    print(f"Client connected: {client_id}")
+    sensor_data = get_sensor_data()
+    if sensor_data is not None:
+        distance_mm = sensor_data["distance_mm"]
+        distance_cm = distance_mm / 10.0  # mm to cm
+        message = {
+            "distance": distance_cm,
+            "duration": sensor_data["duration"],
+            "distance_mm": distance_mm,
+            "ldr_value": sensor_data["ldr_value"],
             "timestamp": datetime.now(UTC).isoformat(),
             "unit": "cm",
-            "valid": distance > 0
-        })
+            "valid": distance_cm > 0 and sensor_data["duration"] > 0
+        }
+        ui.send_message("distance_update", message)
+        print(f"Sent initial distance: {distance_cm:.2f} cm ({distance_mm:.2f} mm), Duration: {sensor_data['duration']} us")
+    else:
+        # Even if sensor reading fails, send -1 to show connection is working
+        message = {
+            "distance": -1.0,
+            "duration": -1,
+            "distance_mm": -1.0,
+            "ldr_value": -1,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "unit": "cm",
+            "valid": False
+        }
+        ui.send_message("distance_update", message)
+        print("Sent initial message (sensor reading failed)")
 
 # Register WebSocket event handlers
 ui.on_message("client_connected", on_client_connected)
@@ -98,11 +148,24 @@ ui.on_message("client_connected", on_client_connected)
 # Main application loop
 def main_loop():
     """Main loop to continuously send distance updates"""
+    print("✅ Main loop started")
+    loop_count = 0
     while True:
-        send_distance_update()
-        time.sleep(0.05)  # Small delay to prevent CPU overload
+        try:
+            send_distance_update()
+            loop_count += 1
+            # Print status every 50 loops (about every 2.5 seconds)
+            if loop_count % 50 == 0:
+                print(f"🔄 Main loop running... (loop {loop_count}, {loop_count * 0.1:.1f}s elapsed)")
+            time.sleep(0.05)  # Small delay to prevent CPU overload
+        except Exception as e:
+            print(f"❌ Error in main loop: {e}")
+            import traceback
+            traceback.print_exc()
+            time.sleep(0.1)  # Wait a bit before retrying
 
 # Run the app with custom loop
+print("Starting App.run()...")
 App.run(user_loop=main_loop)
 ```
 
@@ -130,29 +193,39 @@ ui = WebUI()
 
 - WebSocket 서버를 생성하여 웹 클라이언트와 실시간 통신
 
-### 3. 거리 값 읽기 함수
+### 3. 센서 값 읽기 함수
 
 ```python
-def get_distance_from_sensor():
-    """Get distance measurement from Arduino sensor via Bridge"""
+def get_sensor_data():
+    """Get duration, distance_mm, and ldr_value from Arduino sensor via Bridge"""
     try:
-        result = Bridge.call("get_distance").result()
-        if result is not None:
-            distance = float(result)
-            return distance
+        duration = Bridge.call("get_duration", timeout=1)
+        distance_mm = Bridge.call("get_distance_mm", timeout=1)
+        ldr_value = Bridge.call("get_ldr_value", timeout=1)
+        
+        if duration is not None and distance_mm is not None and ldr_value is not None:
+            return {
+                "duration": int(duration),
+                "distance_mm": float(distance_mm),
+                "ldr_value": int(ldr_value)
+            }
+        else:
+            return None
+    except TimeoutError:
         return None
     except Exception as e:
-        print(f"Error reading distance: {e}")
+        print(f"❌ Error reading sensor data: {e}")
         return None
 ```
 
 **동작 과정:**
-1. `Bridge.call("get_distance")`: Arduino의 `get_distance()` 함수 호출
-2. `.result()`: 결과 값 가져오기
-3. `float(result)`: 문자열을 실수로 변환
-4. 예외 처리: 오류 발생 시 None 반환
+1. `Bridge.call("get_duration")`: Arduino의 `get_duration()` 함수 호출
+2. `Bridge.call("get_distance_mm")`: Arduino의 `get_distance_mm()` 함수 호출
+3. `Bridge.call("get_ldr_value")`: Arduino의 `get_ldr_value()` 함수 호출
+4. 모든 값이 정상적으로 읽히면 딕셔너리로 반환
+5. 예외 처리: 오류 발생 시 None 반환
 
-### 4. 거리 값 전송 함수
+### 4. 센서 값 전송 함수
 
 ```python
 def send_distance_update():
@@ -163,33 +236,42 @@ def send_distance_update():
     
     # Check if enough time has passed since last update
     if current_time - last_update_time >= UPDATE_INTERVAL:
-        distance = get_distance_from_sensor()
+        sensor_data = get_sensor_data()
         
-        if distance is not None:
-            # Prepare message with distance and timestamp
+        if sensor_data is not None:
+            distance_mm = sensor_data["distance_mm"]
+            distance_cm = distance_mm / 10.0  # mm to cm
             message = {
-                "distance": distance,
+                "distance": distance_cm,
+                "duration": sensor_data["duration"],
+                "distance_mm": distance_mm,
+                "ldr_value": sensor_data["ldr_value"],
                 "timestamp": datetime.now(UTC).isoformat(),
                 "unit": "cm",
-                "valid": distance > 0
+                "valid": distance_cm > 0 and sensor_data["duration"] > 0
             }
             
-            # Send to all connected clients
             ui.send_message("distance_update", message)
-            
-            # Print to console for debugging
-            if distance > 0:
-                print(f"Distance: {distance:.2f} cm")
-            else:
-                print("Invalid distance reading")
+        else:
+            # Send error message if sensor reading failed
+            message = {
+                "distance": -1.0,
+                "duration": -1,
+                "distance_mm": -1.0,
+                "ldr_value": -1,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "unit": "cm",
+                "valid": False
+            }
+            ui.send_message("distance_update", message)
         
         last_update_time = current_time
 ```
 
 **동작 과정:**
 1. **업데이트 주기 확인**: `UPDATE_INTERVAL` (0.1초)마다 실행
-2. **거리 값 읽기**: Bridge를 통해 Arduino에서 거리 값 읽기
-3. **메시지 생성**: 거리, 타임스탬프, 단위, 유효성 포함
+2. **센서 값 읽기**: Bridge를 통해 Arduino에서 센서 값 읽기
+3. **메시지 생성**: 거리, duration, 조도 값, 타임스탬프, 단위, 유효성 포함
 4. **전송**: `ui.send_message()`로 모든 연결된 클라이언트에 전송
 
 ### 5. 클라이언트 연결 핸들러
@@ -197,32 +279,39 @@ def send_distance_update():
 ```python
 def on_client_connected(client_id, data):
     """Send initial distance reading when client connects"""
-    distance = get_distance_from_sensor()
-    if distance is not None:
-        ui.send_message("distance_update", {
-            "distance": distance,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "unit": "cm",
-            "valid": distance > 0
-        })
+    print(f"Client connected: {client_id}")
+    sensor_data = get_sensor_data()
+    if sensor_data is not None:
+        # ... 메시지 생성 및 전송
+    else:
+        # 오류 메시지 전송
 ```
 
-- 새 클라이언트가 연결되면 즉시 현재 거리 값을 전송
+- 새 클라이언트가 연결되면 즉시 현재 센서 값을 전송
 
 ### 6. 메인 루프
 
 ```python
 def main_loop():
     """Main loop to continuously send distance updates"""
+    print("✅ Main loop started")
+    loop_count = 0
     while True:
-        send_distance_update()
-        time.sleep(0.05)  # Small delay to prevent CPU overload
+        try:
+            send_distance_update()
+            loop_count += 1
+            if loop_count % 50 == 0:
+                print(f"🔄 Main loop running... (loop {loop_count})")
+            time.sleep(0.05)  # Small delay to prevent CPU overload
+        except Exception as e:
+            print(f"❌ Error in main loop: {e}")
+            time.sleep(0.1)
 
 App.run(user_loop=main_loop)
 ```
 
 - `App.run(user_loop=main_loop)`: 사용자 정의 루프로 앱 실행
-- 0.05초마다 거리 업데이트 함수 호출
+- 0.05초마다 센서 업데이트 함수 호출
 
 ## WebSocket 메시지 형식
 
@@ -231,6 +320,9 @@ App.run(user_loop=main_loop)
 ```json
 {
     "distance": 25.5,
+    "duration": 1457,
+    "distance_mm": 255.0,
+    "ldr_value": 512,
     "timestamp": "2025-01-20T10:30:45.123456+00:00",
     "unit": "cm",
     "valid": true
@@ -239,6 +331,9 @@ App.run(user_loop=main_loop)
 
 **필드 설명:**
 - `distance`: 측정된 거리 값 (cm)
+- `duration`: 펄스 지속 시간 (마이크로초)
+- `distance_mm`: 측정된 거리 값 (mm)
+- `ldr_value`: 조도 센서 값 (0~1023)
 - `timestamp`: 측정 시간 (ISO 8601 형식)
 - `unit`: 거리 단위 ("cm")
 - `valid`: 유효한 측정인지 여부 (true/false)
@@ -265,10 +360,11 @@ UPDATE_INTERVAL = 0.5  # 500ms (2 readings per second)
 
 ```python
 message = {
-    "distance": distance,
+    "distance": distance_cm,
+    "ldr_value": sensor_data["ldr_value"],
     "timestamp": datetime.now(UTC).isoformat(),
     "unit": "cm",
-    "valid": distance > 0,
+    "valid": distance_cm > 0,
     "sensor_id": "HC-SR04",  # 추가 필드
     "temperature": 20.0       # 추가 필드
 }
@@ -281,10 +377,12 @@ message = {
 Arduino App Lab의 콘솔에서 다음 메시지를 확인할 수 있습니다:
 
 ```
-Distance: 25.50 cm
-Distance: 30.25 cm
-Invalid distance reading
-Error reading distance: ...
+Python backend starting...
+WebUI initialized
+✅ Main loop started
+Client connected: abc123
+Sent initial distance: 25.50 cm (255.0 mm), Duration: 1457 us
+🔄 Main loop running... (loop 50, 5.0s elapsed)
 ```
 
 ### Bridge 통신 오류 처리
@@ -292,16 +390,15 @@ Error reading distance: ...
 Bridge 통신이 실패하는 경우:
 
 ```python
-def get_distance_from_sensor():
+def get_sensor_data():
     try:
-        result = Bridge.call("get_distance").result()
-        if result is None:
+        duration = Bridge.call("get_duration", timeout=1)
+        if duration is None:
             print("Warning: Bridge returned None")
             return None
-        distance = float(result)
-        return distance
+        # ...
     except Exception as e:
-        print(f"Error reading distance: {e}")
+        print(f"Error reading sensor data: {e}")
         import traceback
         traceback.print_exc()  # 상세한 오류 정보 출력
         return None
@@ -314,11 +411,16 @@ def get_distance_from_sensor():
 **원인:**
 - Arduino 스케치가 업로드되지 않음
 - Bridge.provide()가 제대로 설정되지 않음
+- 함수 이름 불일치
 
 **해결:**
 1. Arduino 스케치 업로드 확인
-2. 시리얼 모니터에서 "Black Ice Detector initialized" 메시지 확인
-3. Bridge.provide("get_distance", get_distance) 코드 확인
+2. 시리얼 모니터에서 센서 값이 출력되는지 확인
+3. Bridge.provide() 코드 확인:
+   - `Bridge.provide("get_duration", get_duration)`
+   - `Bridge.provide("get_distance_mm", get_distance_mm)`
+   - `Bridge.provide("get_ldr_value", get_ldr_value)`
+4. Bridge.call() 함수 이름 확인
 
 ### WebSocket 연결 오류
 
@@ -345,8 +447,7 @@ Python 백엔드가 완성되었으므로 다음 단계로 진행합니다:
 ## 체크리스트
 
 - [ ] Python 백엔드 코드 작성 완료
-- [ ] Bridge 통신 함수 구현 완료
+- [ ] Bridge 통신 함수 구현 완료 (get_duration, get_distance_mm, get_ldr_value)
 - [ ] WebSocket 메시지 전송 구현 완료
 - [ ] 업데이트 루프 구현 완료
-- [ ] 콘솔에서 거리 값 출력 확인 완료
-
+- [ ] 콘솔에서 센서 값 출력 확인 완료
