@@ -3,10 +3,12 @@
 
 #define TRIG_PIN 2
 #define ECHO_PIN 3
+#define LDR_PIN A1          // 조도 센서 입력 (LDR 분압 노드)
 
 // 최신 측정값 저장
 long latest_duration = 0;
 float latest_distance_mm = 0.0;
+int latest_ldr_value = 0;
 
 // Bridge를 통해 Python에서 호출할 함수들
 long get_duration() {
@@ -17,9 +19,14 @@ float get_distance_mm() {
   return latest_distance_mm;
 }
 
+int get_ldr_value() {
+  return latest_ldr_value;
+}
+
 void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
+  // 아날로그 핀(A1)은 pinMode 설정 불필요 (일부 보드에서는 설정 시 문제 발생)
 
   Serial.begin(9600);
 
@@ -29,6 +36,7 @@ void setup() {
   // Python 백엔드에서 호출할 수 있도록 함수 제공
   Bridge.provide("get_duration", get_duration);
   Bridge.provide("get_distance_mm", get_distance_mm);
+  Bridge.provide("get_ldr_value", get_ldr_value);
 }
 
 void loop() {
@@ -54,6 +62,10 @@ void loop() {
   latest_duration = duration;
   latest_distance_mm = distance_mm;
 
+  // 조도 센서 읽기
+  int ldrValue = analogRead(LDR_PIN);
+  latest_ldr_value = ldrValue;
+
   // 시리얼 출력
   Serial.print("Distance: ");
   Serial.print(distance_mm);
@@ -61,7 +73,12 @@ void loop() {
   Serial.print(distance_mm / 10.0);
   Serial.print(" cm), Duration: ");
   Serial.print(duration);
-  Serial.println(" us");
+  Serial.print(" us, LDR: ");
+  Serial.print(ldrValue);
+  Serial.print(" (");
+  Serial.print((ldrValue * 100) / 1023);
+  Serial.println("%)");
 
   delay(200);
 }
+

@@ -10,6 +10,7 @@ const distanceValueEl = document.getElementById('distanceValue');
 const distanceStatusEl = document.getElementById('distanceStatus');
 const statusIndicatorEl = document.getElementById('statusIndicator');
 const statusTextEl = document.getElementById('statusText');
+const ldrValueEl = document.getElementById('ldrValue');
 
 // Connection status
 let isConnected = false;
@@ -33,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!statusTextEl) {
         console.error('statusTextEl not found!');
+    }
+    if (!ldrValueEl) {
+        console.error('ldrValueEl not found!');
     }
 });
 
@@ -119,6 +123,15 @@ function updateDistanceDisplay(data) {
             statusIndicatorEl.className = 'status-indicator error';
             statusTextEl.textContent = '측정 범위를 벗어났습니다';
         }
+    }
+
+    // Update LDR value
+    if (data.ldr_value !== undefined && data.ldr_value >= 0) {
+        ldrValueEl.textContent = data.ldr_value;
+        ldrValueEl.classList.remove('invalid');
+    } else {
+        ldrValueEl.textContent = '--';
+        ldrValueEl.classList.add('invalid');
     }
 
     lastUpdateTime = Date.now();

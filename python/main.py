@@ -18,16 +18,18 @@ print("Python backend starting...")
 print("WebUI initialized")
 
 def get_sensor_data():
-    """Get duration and distance_mm from Arduino sensor via Bridge"""
+    """Get duration, distance_mm, and ldr_value from Arduino sensor via Bridge"""
     try:
         # Bridge.call() with shorter timeout (1 second - 더 빠른 응답)
         duration = Bridge.call("get_duration", timeout=1)
         distance_mm = Bridge.call("get_distance_mm", timeout=1)
+        ldr_value = Bridge.call("get_ldr_value", timeout=1)
         
-        if duration is not None and distance_mm is not None:
+        if duration is not None and distance_mm is not None and ldr_value is not None:
             return {
                 "duration": int(duration),
-                "distance_mm": float(distance_mm)
+                "distance_mm": float(distance_mm),
+                "ldr_value": int(ldr_value)
             }
         else:
             # 조용히 처리 (로그 스팸 방지)
@@ -53,13 +55,14 @@ def send_distance_update():
         
         # Always send message, even if sensor data is invalid
         if sensor_data is not None:
-            # Prepare message with distance, duration, distance_mm
+            # Prepare message with distance, duration, distance_mm, ldr_value
             distance_mm = sensor_data["distance_mm"]
             distance_cm = distance_mm / 10.0  # mm to cm
             message = {
                 "distance": distance_cm,
                 "duration": sensor_data["duration"],
                 "distance_mm": distance_mm,
+                "ldr_value": sensor_data["ldr_value"],
                 "timestamp": datetime.now(UTC).isoformat(),
                 "unit": "cm",
                 "valid": distance_cm > 0 and sensor_data["duration"] > 0
@@ -79,6 +82,7 @@ def send_distance_update():
                 "distance": -1.0,
                 "duration": -1,
                 "distance_mm": -1.0,
+                "ldr_value": -1,
                 "timestamp": datetime.now(UTC).isoformat(),
                 "unit": "cm",
                 "valid": False
@@ -98,6 +102,7 @@ def on_client_connected(client_id, data):
             "distance": distance_cm,
             "duration": sensor_data["duration"],
             "distance_mm": distance_mm,
+            "ldr_value": sensor_data["ldr_value"],
             "timestamp": datetime.now(UTC).isoformat(),
             "unit": "cm",
             "valid": distance_cm > 0 and sensor_data["duration"] > 0
@@ -110,6 +115,7 @@ def on_client_connected(client_id, data):
             "distance": -1.0,
             "duration": -1,
             "distance_mm": -1.0,
+            "ldr_value": -1,
             "timestamp": datetime.now(UTC).isoformat(),
             "unit": "cm",
             "valid": False

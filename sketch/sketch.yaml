@@ -8,5 +8,7 @@ profiles:
       - DebugLog (0.8.4)
       - ArxContainer (0.7.0)
       - ArxTypeTraits (0.3.1)
-default_profile: default
+      - dependency: Adafruit Unified Sensor (1.1.15)
+      - DHT sensor library (1.4.6)
 
+default_profile: default

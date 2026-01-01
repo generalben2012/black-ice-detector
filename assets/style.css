@@ -143,6 +143,49 @@ body {
     font-weight: 500;
 }
 
+.ldr-card {
+    background: white;
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ldr-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ldr-label {
+    font-size: 18px;
+    color: #666;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+.ldr-value {
+    font-size: 72px;
+    font-weight: 700;
+    color: #008184;
+    font-family: "Roboto Mono", monospace;
+    line-height: 1;
+    margin: 20px 0;
+    transition: color 0.3s ease;
+}
+
+.ldr-value.invalid {
+    color: #999;
+    font-size: 48px;
+}
+
+.ldr-unit {
+    font-size: 24px;
+    color: #666;
+    margin-bottom: 30px;
+    font-weight: 500;
+}
+
 .info-card {
     background: white;
     border-radius: 16px;
@@ -240,6 +283,18 @@ body {
         font-size: 36px;
     }
 
+    .ldr-card {
+        padding: 30px 20px;
+    }
+
+    .ldr-value {
+        font-size: 56px;
+    }
+
+    .ldr-value.invalid {
+        font-size: 36px;
+    }
+
     .info-card {
         padding: 20px;
     }
@@ -255,6 +310,14 @@ body {
     }
 
     .distance-value.invalid {
+        font-size: 32px;
+    }
+
+    .ldr-value {
+        font-size: 48px;
+    }
+
+    .ldr-value.invalid {
         font-size: 32px;
     }
 }
