@@ -11,10 +11,26 @@ const distanceStatusEl = document.getElementById('distanceStatus');
 const statusIndicatorEl = document.getElementById('statusIndicator');
 const statusTextEl = document.getElementById('statusText');
 const ldrValueEl = document.getElementById('ldrValue');
+const temperatureInputEl = document.getElementById('temperatureInput');
+const humidityInputEl = document.getElementById('humidityInput');
+const locationInputEl = document.getElementById('locationInput');
+const measureButtonEl = document.getElementById('measureButton');
+const measurementStatusEl = document.getElementById('measurementStatus');
+const avgDistanceEl = document.getElementById('avgDistance');
+const avgLdrEl = document.getElementById('avgLdr');
+const avgTempEl = document.getElementById('avgTemp');
+const avgHumidityEl = document.getElementById('avgHumidity');
+const avgLocationEl = document.getElementById('avgLocation');
+const measurementDurationLabelEl = document.getElementById('measurementDurationLabel');
 
 // Connection status
 let isConnected = false;
 let lastUpdateTime = null;
+let isMeasuring = false;
+let measurementDurationSec = null;
+let countdownIntervalId = null;
+let measurementEndTime = null;
+let measurementSamplesInfo = null;
 
 // 마지막으로 측정된 유효한 거리 값 저장
 let lastValidDistance = null;
@@ -24,6 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Page loaded, initializing...');
     initSocketIO();
     updateConnectionStatus(false);
+
+    if (measureButtonEl) {
+        measureButtonEl.addEventListener('click', handleMeasurementRequest);
+    }
     
     // 디버깅: DOM 요소 확인
     if (!distanceValueEl) {
@@ -37,6 +57,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!ldrValueEl) {
         console.error('ldrValueEl not found!');
+    }
+    if (!measureButtonEl) {
+        console.error('measureButtonEl not found!');
+    }
+    if (!locationInputEl) {
+        console.error('locationInputEl not found!');
+    }
+    if (measurementDurationLabelEl) {
+        const initialDuration = parseInt(measurementDurationLabelEl.textContent, 10);
+        if (!Number.isNaN(initialDuration)) {
+            measurementDurationSec = initialDuration;
+        }
     }
 });
 
@@ -79,6 +111,27 @@ function initSocketIO() {
         updateDistanceDisplay(data);
     });
 
+    socket.on('config', (data) => {
+        if (!data) {
+            return;
+        }
+        updateConfigDisplay(data);
+    });
+
+    socket.on('measurement_status', (data) => {
+        if (!data) {
+            return;
+        }
+        updateMeasurementStatus(data);
+    });
+
+    socket.on('measurement_result', (data) => {
+        if (!data) {
+            return;
+        }
+        updateMeasurementResult(data);
+    });
+
     socket.on('error', (error) => {
         console.error('Server error:', error);
         if (errorContainer) {
@@ -86,6 +139,172 @@ function initSocketIO() {
             errorContainer.style.display = 'block';
         }
     });
+}
+
+function updateConfigDisplay(data) {
+    if (measurementDurationLabelEl && typeof data.measurement_duration === 'number') {
+        measurementDurationSec = Math.round(data.measurement_duration);
+        measurementDurationLabelEl.textContent = measurementDurationSec;
+    }
+}
+
+function handleMeasurementRequest() {
+    if (isMeasuring) {
+        return;
+    }
+
+    const tempValue = parseFloat(temperatureInputEl?.value);
+    const humidityValue = parseFloat(humidityInputEl?.value);
+    const locationValue = parseInt(locationInputEl?.value, 10);
+
+    if (Number.isNaN(tempValue) || Number.isNaN(humidityValue) || Number.isNaN(locationValue)) {
+        showError('온도, 습도, 위치 번호를 숫자로 입력하세요.');
+        return;
+    }
+
+    if (humidityValue < 0 || humidityValue > 100) {
+        showError('습도는 0~100 범위로 입력하세요.');
+        return;
+    }
+
+    clearError();
+    setMeasurementBusy(true, '측정 요청 중...');
+
+    socket.emit('measurement_request', {
+        temperature: tempValue,
+        humidity: humidityValue,
+        location: locationValue
+    });
+}
+
+function updateMeasurementStatus(data) {
+    const state = data.state;
+    const remaining = data.remaining_seconds;
+    const samplesTaken = data.samples_taken;
+    const samplesTotal = data.samples_total;
+
+    if (state === 'started') {
+        const durationText = typeof measurementDurationSec === 'number'
+            ? `${measurementDurationSec}초 소요`
+            : '측정 중...';
+        setMeasurementBusy(true, `측정 중... (${durationText})`);
+        startCountdown(remaining, samplesTaken, samplesTotal);
+    } else if (state === 'progress') {
+        startCountdown(remaining, samplesTaken, samplesTotal);
+    } else if (state === 'completed') {
+        stopCountdown();
+        setMeasurementBusy(false, '측정 완료');
+    } else if (state === 'error') {
+        stopCountdown();
+        setMeasurementBusy(false, data.message || '측정 실패');
+    }
+}
+
+function updateMeasurementResult(data) {
+    const distance = data.distance_cm_avg;
+    const ldr = data.ldr_avg;
+    const temperature = data.temperature;
+    const humidity = data.humidity;
+    const location = data.location;
+
+    if (typeof distance === 'number' && distance >= 0) {
+        avgDistanceEl.textContent = distance.toFixed(2);
+    } else {
+        avgDistanceEl.textContent = '--';
+    }
+
+    if (typeof ldr === 'number' && ldr >= 0) {
+        avgLdrEl.textContent = Math.round(ldr);
+    } else {
+        avgLdrEl.textContent = '--';
+    }
+
+    if (typeof temperature === 'number') {
+        avgTempEl.textContent = temperature.toFixed(1);
+    } else {
+        avgTempEl.textContent = '--';
+    }
+
+    if (typeof humidity === 'number') {
+        avgHumidityEl.textContent = humidity.toFixed(1);
+    } else {
+        avgHumidityEl.textContent = '--';
+    }
+
+    if (typeof location === 'number') {
+        avgLocationEl.textContent = location.toString();
+    } else if (typeof location === 'string') {
+        avgLocationEl.textContent = location;
+    } else {
+        avgLocationEl.textContent = '--';
+    }
+
+    setMeasurementBusy(false, '측정 완료');
+}
+
+function startCountdown(remainingSeconds, samplesTaken, samplesTotal) {
+    if (typeof remainingSeconds === 'number') {
+        measurementEndTime = Date.now() + remainingSeconds * 1000;
+    }
+    measurementSamplesInfo = {
+        samplesTaken,
+        samplesTotal
+    };
+
+    if (countdownIntervalId) {
+        return;
+    }
+
+    countdownIntervalId = setInterval(() => {
+        if (!measurementEndTime || !measurementStatusEl) {
+            return;
+        }
+        const remainingMs = Math.max(0, measurementEndTime - Date.now());
+        const remainingSec = Math.ceil(remainingMs / 1000);
+        const samplesText = measurementSamplesInfo &&
+            typeof measurementSamplesInfo.samplesTaken === 'number' &&
+            typeof measurementSamplesInfo.samplesTotal === 'number'
+            ? ` (${measurementSamplesInfo.samplesTaken}/${measurementSamplesInfo.samplesTotal})`
+            : '';
+        setMeasurementBusy(true, `${remainingSec}초 남음${samplesText}`);
+        if (remainingSec <= 0) {
+            stopCountdown();
+        }
+    }, 250);
+}
+
+function stopCountdown() {
+    if (countdownIntervalId) {
+        clearInterval(countdownIntervalId);
+        countdownIntervalId = null;
+    }
+    measurementEndTime = null;
+    measurementSamplesInfo = null;
+}
+
+function setMeasurementBusy(isBusy, statusText) {
+    isMeasuring = isBusy;
+    if (measureButtonEl) {
+        measureButtonEl.disabled = isBusy;
+        measureButtonEl.textContent = isBusy ? '측정 중...' : '측정';
+    }
+    if (measurementStatusEl && statusText) {
+        measurementStatusEl.textContent = statusText;
+    }
+}
+
+function showError(message) {
+    if (errorContainer) {
+        errorContainer.textContent = message;
+        errorContainer.style.display = 'block';
+    }
+}
+
+function clearError() {
+    if (errorContainer) {
+        errorContainer.textContent = '';
+        errorContainer.style.display = 'none';
+    }
 }
 
 function updateDistanceDisplay(data) {

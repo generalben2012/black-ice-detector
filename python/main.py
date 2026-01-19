@@ -4,18 +4,25 @@
 
 from arduino.app_utils import *
 from arduino.app_bricks.web_ui import WebUI
+import json
 import time
 from datetime import datetime, UTC
+from pathlib import Path
 
 # Initialize WebUI
 ui = WebUI()
 
 # Distance measurement settings
-UPDATE_INTERVAL = 0.1  # Update every 100ms (10 readings per second)
+UPDATE_INTERVAL = 0.05  # Update every 50ms (20 readings per second)
 last_update_time = 0.0
+MEASUREMENT_DURATION = 30.0
+MEASUREMENT_INTERVAL = 5.0
+measurement_session = None
 
 print("Python backend starting...")
 print("WebUI initialized")
+
+MEASUREMENTS_PATH = Path(__file__).parent / "measurements.jsonl"
 
 def get_sensor_data():
     """Get duration, distance_mm, and ldr_value from Arduino sensor via Bridge"""
@@ -41,6 +48,109 @@ def get_sensor_data():
         # 심각한 오류만 출력
         print(f"❌ Error reading sensor data: {e}")
         return None
+
+
+def start_measurement_session(temperature, humidity, location):
+    """Start a 1-minute averaging session for distance and LDR."""
+    global measurement_session
+    now = time.time()
+    measurement_session = {
+        "start_time": now,
+        "next_sample_time": now,
+        "samples": [],
+        "temperature": float(temperature),
+        "humidity": float(humidity),
+        "location": location,
+    }
+    total_samples = int(MEASUREMENT_DURATION / MEASUREMENT_INTERVAL)
+    ui.send_message("measurement_status", {
+        "state": "started",
+        "remaining_seconds": int(MEASUREMENT_DURATION),
+        "samples_taken": 0,
+        "samples_total": total_samples,
+    })
+
+
+def update_measurement_session():
+    """Collect samples and finalize when the session ends."""
+    global measurement_session
+    if not measurement_session:
+        return
+
+    now = time.time()
+    elapsed = now - measurement_session["start_time"]
+    total_samples = int(MEASUREMENT_DURATION / MEASUREMENT_INTERVAL)
+
+    if elapsed >= MEASUREMENT_DURATION:
+        finalize_measurement_session(total_samples)
+        measurement_session = None
+        return
+
+    while now >= measurement_session["next_sample_time"]:
+        sensor_data = get_sensor_data()
+        if sensor_data and sensor_data["distance_mm"] > 0 and sensor_data["ldr_value"] >= 0:
+            measurement_session["samples"].append({
+                "distance_mm": sensor_data["distance_mm"],
+                "ldr_value": sensor_data["ldr_value"],
+            })
+        measurement_session["next_sample_time"] += MEASUREMENT_INTERVAL
+        now = time.time()
+        elapsed = now - measurement_session["start_time"]
+
+        ui.send_message("measurement_status", {
+            "state": "progress",
+            "remaining_seconds": max(0, int(MEASUREMENT_DURATION - elapsed)),
+            "samples_taken": len(measurement_session["samples"]),
+            "samples_total": total_samples,
+        })
+
+
+def finalize_measurement_session(total_samples):
+    """Compute averages and send result to the UI."""
+    samples = measurement_session["samples"]
+    if samples:
+        distance_mm_avg = sum(s["distance_mm"] for s in samples) / len(samples)
+        ldr_avg = sum(s["ldr_value"] for s in samples) / len(samples)
+        distance_cm_avg = distance_mm_avg / 10.0
+    else:
+        distance_cm_avg = -1.0
+        ldr_avg = -1.0
+
+    result = {
+        "distance_cm_avg": distance_cm_avg,
+        "ldr_avg": ldr_avg,
+        "temperature": measurement_session["temperature"],
+        "humidity": measurement_session["humidity"],
+        "location": measurement_session["location"],
+        "samples_taken": len(samples),
+        "samples_total": total_samples,
+    }
+    save_measurement_result(result)
+    ui.send_message("measurement_result", result)
+    ui.send_message("measurement_status", {
+        "state": "completed",
+        "remaining_seconds": 0,
+        "samples_taken": len(samples),
+        "samples_total": total_samples,
+    })
+
+
+def save_measurement_result(result):
+    """Append measurement result to JSONL file with date/time fields."""
+    now = datetime.now().astimezone()
+    record = {
+        "measured_at": now.isoformat(),
+        "date": now.date().isoformat(),
+        "time": now.time().replace(microsecond=0).isoformat(),
+        "measurement_duration_sec": MEASUREMENT_DURATION,
+        "measurement_interval_sec": MEASUREMENT_INTERVAL,
+        **result,
+    }
+    try:
+        with MEASUREMENTS_PATH.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"❌ Failed to write measurement log: {e}")
 
 
 def send_distance_update():
@@ -94,6 +204,10 @@ def send_distance_update():
 def on_client_connected(client_id, data):
     """Send initial distance reading when client connects"""
     print(f"Client connected: {client_id}")
+    ui.send_message("config", {
+        "measurement_duration": MEASUREMENT_DURATION,
+        "measurement_interval": MEASUREMENT_INTERVAL,
+    })
     sensor_data = get_sensor_data()
     if sensor_data is not None:
         distance_mm = sensor_data["distance_mm"]
@@ -123,8 +237,26 @@ def on_client_connected(client_id, data):
         ui.send_message("distance_update", message)
         print("Sent initial message (sensor reading failed)")
 
+
+def on_measurement_request(client_id, data):
+    """Handle measurement request from UI."""
+    try:
+        temperature = data.get("temperature")
+        humidity = data.get("humidity")
+        location = data.get("location")
+        if temperature is None or humidity is None or location is None:
+            raise ValueError("missing temperature, humidity, or location")
+        start_measurement_session(temperature, humidity, location)
+    except Exception as e:
+        ui.send_message("measurement_status", {
+            "state": "error",
+            "message": f"측정 시작 실패: {e}",
+        })
+
+
 # Register WebSocket event handlers
 ui.on_message("client_connected", on_client_connected)
+ui.on_message("measurement_request", on_measurement_request)
 
 # Main application loop
 def main_loop():
@@ -134,10 +266,11 @@ def main_loop():
     while True:
         try:
             send_distance_update()
+            update_measurement_session()
             loop_count += 1
             # Print status every 50 loops (about every 2.5 seconds)
             if loop_count % 50 == 0:
-                print(f"🔄 Main loop running... (loop {loop_count}, {loop_count * 0.1:.1f}s elapsed)")
+                print(f"🔄 Main loop running... (loop {loop_count}, {loop_count * UPDATE_INTERVAL:.1f}s elapsed)")
             time.sleep(0.05)  # Small delay to prevent CPU overload
         except Exception as e:
             print(f"❌ Error in main loop: {e}")
