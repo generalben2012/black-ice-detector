@@ -22,6 +22,7 @@ const avgTempEl = document.getElementById('avgTemp');
 const avgHumidityEl = document.getElementById('avgHumidity');
 const avgLocationEl = document.getElementById('avgLocation');
 const measurementDurationLabelEl = document.getElementById('measurementDurationLabel');
+const cameraFeedEl = document.getElementById('cameraFeed');
 
 // Connection status
 let isConnected = false;
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Page loaded, initializing...');
     initSocketIO();
     updateConnectionStatus(false);
+    initCamera();
 
     if (measureButtonEl) {
         measureButtonEl.addEventListener('click', handleMeasurementRequest);
@@ -139,6 +141,20 @@ function initSocketIO() {
             errorContainer.style.display = 'block';
         }
     });
+}
+
+function initCamera() {
+    if (!cameraFeedEl || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+            cameraFeedEl.srcObject = stream;
+        })
+        .catch((error) => {
+            console.warn('Camera access failed:', error);
+        });
 }
 
 function updateConfigDisplay(data) {

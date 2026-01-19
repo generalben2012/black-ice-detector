@@ -56,7 +56,13 @@ body {
     gap: 30px;
 }
 
-.distance-display-container {
+.top-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 30px;
+}
+
+.second-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 30px;
@@ -161,6 +167,41 @@ body {
 .ldr-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.camera-card {
+    background: white;
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.camera-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.camera-label {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 16px;
+    font-weight: 500;
+}
+
+.camera-frame {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #111;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.camera-frame video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .ldr-label {
@@ -381,7 +422,11 @@ body {
         font-size: 18px;
     }
 
-    .distance-display-container {
+    .top-row {
+        grid-template-columns: 1fr;
+    }
+
+    .second-row {
         grid-template-columns: 1fr;
     }
 
@@ -407,6 +452,14 @@ body {
 
     .ldr-value.invalid {
         font-size: 28px;
+    }
+
+    .camera-card {
+        padding: 20px 18px;
+    }
+
+    .camera-label {
+        font-size: 12px;
     }
 
     .info-card {
