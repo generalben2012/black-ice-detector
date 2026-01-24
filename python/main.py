@@ -9,13 +9,47 @@ from base64 import b64decode
 import json
 import os
 import time
+import yaml
 from datetime import datetime, UTC, timezone, timedelta
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 
+def enable_fhd_stream():
+
+    video_device = os.getenv("VIDEO_DEVICE", "/dev/video1")
+    default_args = (
+        f"v4l2src device={video_device} ! video/x-raw,width=1920,height=1080,framerate=5/1 "
+        "! videoconvert ! jpegenc quality=70"
+    )
+    os.environ.setdefault("GST_LAUNCH_ARGS", default_args)
+
+    try:
+        compose_path = Path(VideoObjectDetection.__module__.replace(".", "/")).with_suffix("")
+        compose_path = Path("/usr/local/lib/python3.13/site-packages") / compose_path / "brick_compose.yaml"
+        if not compose_path.exists():
+            return False
+
+        compose = yaml.safe_load(compose_path.read_text())
+        services = compose.get("services", {})
+        service = services.get("ei-video-obj-detection-runner", {})
+        command = service.get("command", [])
+        if isinstance(command, list):
+            if "--gst-launch-args" not in command:
+                insert_at = command.index("--camera") if "--camera" in command else len(command)
+                command[insert_at:insert_at] = ["--gst-launch-args", "${GST_LAUNCH_ARGS}"]
+                service["command"] = command
+                services["ei-video-obj-detection-runner"] = service
+                compose["services"] = services
+                compose_path.write_text(yaml.safe_dump(compose, sort_keys=False))
+        return True
+    except Exception as e:
+        print(f"⚠️ FHD setup skipped: {e}")
+        return False
+
 # Initialize WebUI
 ui = WebUI()
+enable_fhd_stream()
 camera_stream = VideoObjectDetection(confidence=0.5, debounce_sec=0.0)
 
 # Distance measurement settings
