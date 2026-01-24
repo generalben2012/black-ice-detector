@@ -1,12 +1,14 @@
 # 2단계: Arduino 스케치 작성
 
-이 문서는 HC-SR04 초음파 센서와 LDR 조도 센서를 제어하는 Arduino 스케치를 작성하는 방법을 설명합니다.
+이 문서는 HC-SR04 초음파 센서와 LDR 조도 센서를 제어하는 Arduino 스케치를 작성하는 방법을 설명합니다.  
+추가로 **외부 Arduino 보드에서 DHT22 + I2C LCD를 구동**하는 스케치도 함께 정리합니다.
 
 ## 목표
 
 - HC-SR04 초음파 센서를 사용하여 거리를 측정
 - LDR 조도 센서를 사용하여 주변 밝기 측정
 - Python 백엔드에서 호출할 수 있는 함수 제공
+- 외부 Arduino 보드에서 DHT22 온습도 측정 및 LCD 표시
 
 ## 센서 개요
 
@@ -27,6 +29,14 @@ LDR (Light Dependent Resistor)은 빛에 따라 저항이 변하는 센서입니
 - **분압 회로**: LDR과 고정 저항(470Ω)을 사용한 분압 회로로 구성
 - **아날로그 읽기**: A1 핀에서 0~1023 범위의 값 읽기
 - **값 해석**: 값이 클수록 밝고, 작을수록 어둡습니다
+
+### DHT22 온습도 센서 (외부 보드)
+
+DHT22는 온도와 습도를 동시에 측정하는 디지털 센서입니다:
+
+- **측정 범위**: 온도 -40~80°C, 습도 0~100%
+- **출력**: 디지털 신호 (DHT 라이브러리 사용)
+- **읽기 간격**: 2초 이상 권장 (센서 안정성)
 
 ## 센서 연결
 
@@ -65,6 +75,27 @@ LDR 조도 센서는 분압 회로로 구성합니다:
 **주의사항:**
 - Arduino UNO Q에서는 아날로그 핀에 `pinMode()`를 설정하지 않아야 합니다.
 - 저항 값은 470Ω을 권장합니다 (가장 이상적인 측정 범위를 제공합니다).
+
+### 외부 DHT22 + I2C LCD 연결 (그림)
+
+외부 Arduino 보드에 다음과 같이 연결합니다.
+
+```text
+외부 Arduino (UNO 기준)
+┌─────────────────────────────┐
+│ DHT22 VCC  -> 5V             │
+│ DHT22 GND  -> GND            │
+│ DHT22 DATA -> D5             │
+│                               │
+│ I2C LCD VCC -> 5V             │
+│ I2C LCD GND -> GND            │
+│ I2C LCD SDA -> A4 (SDA)       │
+│ I2C LCD SCL -> A5 (SCL)       │
+└─────────────────────────────┘
+```
+
+- LCD I2C 주소는 보통 `0x27` 또는 `0x3F`입니다.
+- 보드에 따라 SDA/SCL 핀 위치가 다를 수 있으니 보드 실크를 확인하세요.
 
 ## 스케치 코드 작성
 
@@ -157,6 +188,72 @@ void loop() {
   delay(200);
 }
 ```
+
+## 외부 온습도 보드 스케치 (참고 코드)
+
+다음 코드는 **별도의 Arduino 보드**에서 DHT22 값을 읽어 LCD에 표시하고, 시리얼로 출력합니다.
+
+```cpp
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+#define DHTPIN 5
+#define DHTTYPE DHT22
+
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("DHT22 + LCD");
+  lcd.setCursor(0, 1);
+  lcd.print("Starting...");
+  delay(1500);
+  lcd.clear();
+}
+
+void loop() {
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) {
+    lcd.setCursor(0, 0);
+    lcd.print("Sensor error    ");
+    lcd.setCursor(0, 1);
+    lcd.print("Check wiring    ");
+    delay(2000);
+    return;
+  }
+
+  lcd.setCursor(0, 0);
+  lcd.print("Temp: ");
+  lcd.print(t, 1);
+  lcd.print((char)223);
+  lcd.print("C   ");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Hum : ");
+  lcd.print(h, 1);
+  lcd.print("%    ");
+
+  Serial.print("Temp: ");
+  Serial.print(t);
+  Serial.print(" C, Humidity: ");
+  Serial.print(h);
+  Serial.println(" %");
+
+  delay(2000);
+}
+```
+
+**활용 방법:**
+- LCD에 표시된 값을 웹 UI의 **수동 입력(온도/습도)**에 입력합니다.
+- 시리얼 출력은 선택 사항이며, 값 확인용으로 사용합니다.
 
 ## 코드 설명
 

@@ -1,12 +1,14 @@
 # 3단계: Python 백엔드 작성
 
-이 문서는 Arduino Bridge를 통해 센서 값을 읽고 웹 클라이언트에 전송하는 Python 백엔드를 작성하는 방법을 설명합니다.
+이 문서는 Arduino Bridge를 통해 센서 값을 읽고 웹 클라이언트에 전송하는 Python 백엔드를 작성하는 방법을 설명합니다.  
+외부 DHT22 보드의 온습도 값은 **웹 수동 입력**으로 백엔드에 전달됩니다.
 
 ## 목표
 
 - Arduino Bridge를 통해 거리 값과 조도 값을 읽기
 - WebSocket을 사용하여 웹 클라이언트에 실시간으로 센서 값 전송
 - 주기적으로 센서 값을 업데이트
+- 수동 입력된 온도/습도 값을 측정 요청에 포함하여 저장
 
 ## Arduino Bridge란?
 
@@ -15,6 +17,23 @@ Arduino Bridge는 Python 백엔드와 Arduino 스케치 간의 통신을 가능�
 - **Bridge.provide()**: Arduino에서 Python으로 함수 제공
 - **Bridge.call()**: Python에서 Arduino 함수 호출
 - 양방향 통신 지원
+
+## 외부 온습도 보드 데이터 흐름
+
+외부 Arduino 보드는 DHT22를 읽어 LCD에 표시합니다.  
+사용자는 LCD 값을 보고 **웹 수동 입력 폼**에 온도/습도를 입력합니다.
+
+```mermaid
+sequenceDiagram
+    participant DHT as 외부 Arduino(DHT22+LCD)
+    participant User as 사용자
+    participant UI as 웹 UI
+    participant BE as Python 백엔드
+    DHT->>User: LCD에 온습도 표시
+    User->>UI: 온도/습도 수동 입력
+    UI->>BE: measurement_request (temperature, humidity)
+    BE->>BE: JSONL 저장
+```
 
 ## Python 백엔드 코드 작성
 
@@ -329,6 +348,17 @@ App.run(user_loop=main_loop)
 }
 ```
 
+### 측정 요청 메시지 (수동 입력 포함)
+
+```json
+{
+    "temperature": 26.4,
+    "humidity": 17.2,
+    "location": 101,
+    "black_ice_status": "occurred"
+}
+```
+
 **필드 설명:**
 - `distance`: 측정된 거리 값 (cm)
 - `duration`: 펄스 지속 시간 (마이크로초)
@@ -337,6 +367,19 @@ App.run(user_loop=main_loop)
 - `timestamp`: 측정 시간 (ISO 8601 형식)
 - `unit`: 거리 단위 ("cm")
 - `valid`: 유효한 측정인지 여부 (true/false)
+
+## 측정 결과 저장(JSONL)에 포함되는 온습도
+
+수동 입력된 온도/습도는 결과 레코드에 포함됩니다:
+
+```json
+{
+    "temperature": 27.1,
+    "humidity": 24.4,
+    "location": 3,
+    "black_ice_status": "occurred"
+}
+```
 
 ## 커스터마이징
 
