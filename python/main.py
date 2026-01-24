@@ -4,13 +4,19 @@
 
 from arduino.app_utils import *
 from arduino.app_bricks.web_ui import WebUI
+from arduino.app_bricks.video_objectdetection import VideoObjectDetection
+from base64 import b64decode
 import json
+import os
 import time
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timezone, timedelta
 from pathlib import Path
+from urllib.request import Request, urlopen
+
 
 # Initialize WebUI
 ui = WebUI()
+camera_stream = VideoObjectDetection(confidence=0.5, debounce_sec=0.0)
 
 # Distance measurement settings
 UPDATE_INTERVAL = 0.05  # Update every 50ms (20 readings per second)
@@ -18,11 +24,138 @@ last_update_time = 0.0
 MEASUREMENT_DURATION = 30.0
 MEASUREMENT_INTERVAL = 5.0
 measurement_session = None
+KST_TZ = timezone(timedelta(hours=9))
+PHOTO_DIR = Path(__file__).parent / "photos"
+CAMERA_HOST = os.getenv("EI_VIDEO_HOST", "ei-video-obj-detection-runner")
+CAMERA_BASE_URL = f"http://{CAMERA_HOST}:4912"
 
 print("Python backend starting...")
 print("WebUI initialized")
 
 MEASUREMENTS_PATH = Path(__file__).parent / "measurements.jsonl"
+PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def fetch_url_bytes(url, timeout=3, data=None):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    if data is not None:
+        headers["Content-Type"] = "text/plain;charset=UTF-8"
+    request = Request(url, data=data, headers=headers)
+    with urlopen(request, timeout=timeout) as response:
+        content_type = response.headers.get("Content-Type", "")
+        return response.read(), content_type
+
+def parse_engineio_payload(payload_text):
+    if "\x1e" in payload_text:
+        return [part for part in payload_text.split("\x1e") if part]
+    packets = []
+    idx = 0
+    length = len(payload_text)
+    while idx < length:
+        if payload_text[idx].isdigit():
+            j = idx
+            while j < length and payload_text[j].isdigit():
+                j += 1
+            if j < length and payload_text[j] == ":":
+                packet_len = int(payload_text[idx:j])
+                start = j + 1
+                end = start + packet_len
+                packets.append(payload_text[start:end])
+                idx = end
+                continue
+        packets.append(payload_text[idx:])
+        break
+    return packets
+
+def parse_socketio_event(packet):
+    if not packet.startswith("42"):
+        return None, None
+    try:
+        payload = json.loads(packet[2:])
+        if isinstance(payload, list) and len(payload) >= 2:
+            return payload[0], payload[1]
+    except Exception:
+        return None, None
+    return None, None
+
+def decode_data_url(data_url):
+    if not isinstance(data_url, str):
+        return None, None
+    if data_url.startswith("data:") and "," in data_url:
+        header, b64_data = data_url.split(",", 1)
+        mime_type = header.split(";")[0].replace("data:", "")
+        return b64decode(b64_data), mime_type
+    return None, None
+
+def capture_image_via_socketio(timeout_sec=3, max_polls=6):
+    try:
+        open_payload, _ = fetch_url_bytes(
+            f"{CAMERA_BASE_URL}/socket.io/?EIO=4&transport=polling&t={int(time.time() * 1000)}",
+            timeout=timeout_sec,
+        )
+        packets = parse_engineio_payload(open_payload.decode("utf-8", errors="ignore"))
+        sid = None
+        for packet in packets:
+            if packet.startswith("0"):
+                info = json.loads(packet[1:])
+                sid = info.get("sid")
+                break
+        if not sid:
+            return None, None
+
+        fetch_url_bytes(
+            f"{CAMERA_BASE_URL}/socket.io/?EIO=4&transport=polling&sid={sid}",
+            timeout=timeout_sec,
+            data=b"40",
+        )
+        fetch_url_bytes(
+            f"{CAMERA_BASE_URL}/socket.io/?EIO=4&transport=polling&sid={sid}",
+            timeout=timeout_sec,
+            data=b'42["hello"]',
+        )
+
+        for _ in range(max_polls):
+            poll_payload, _ = fetch_url_bytes(
+                f"{CAMERA_BASE_URL}/socket.io/?EIO=4&transport=polling&sid={sid}&t={int(time.time() * 1000)}",
+                timeout=timeout_sec,
+            )
+            packets = parse_engineio_payload(poll_payload.decode("utf-8", errors="ignore"))
+            for packet in packets:
+                if packet == "2":
+                    fetch_url_bytes(
+                        f"{CAMERA_BASE_URL}/socket.io/?EIO=4&transport=polling&sid={sid}",
+                        timeout=timeout_sec,
+                        data=b"3",
+                    )
+                    continue
+                event, data = parse_socketio_event(packet)
+                if event == "image" and isinstance(data, dict):
+                    img_data = data.get("img")
+                    image_bytes, mime_type = decode_data_url(img_data)
+                    if image_bytes:
+                        return image_bytes, mime_type or "image/jpeg"
+            time.sleep(0.2)
+    except Exception:
+        return None, None
+    return None, None
+
+def get_camera_snapshot():
+    return capture_image_via_socketio()
+
+def capture_photo(measured_at):
+    image_bytes, mime_type = get_camera_snapshot()
+    if not image_bytes:
+        return None, False, "camera snapshot failed"
+    ext = "jpg"
+    if mime_type == "image/png" or image_bytes.startswith(b"\x89PNG"):
+        ext = "png"
+    filename = f"{measured_at.isoformat()}.{ext}"
+    photo_path = PHOTO_DIR / filename
+    try:
+        photo_path.write_bytes(image_bytes)
+        return filename, True, None
+    except Exception as e:
+        return filename, False, str(e)
 
 def get_sensor_data():
     """Get duration, distance_mm, and ldr_value from Arduino sensor via Bridge"""
@@ -50,10 +183,12 @@ def get_sensor_data():
         return None
 
 
-def start_measurement_session(temperature, humidity, location):
+def start_measurement_session(temperature, humidity, location, black_ice_status):
     """Start a 1-minute averaging session for distance and LDR."""
     global measurement_session
     now = time.time()
+    measured_at = datetime.now(KST_TZ).replace(microsecond=0)
+    photo_filename, photo_saved, photo_error = capture_photo(measured_at)
     measurement_session = {
         "start_time": now,
         "next_sample_time": now,
@@ -61,6 +196,11 @@ def start_measurement_session(temperature, humidity, location):
         "temperature": float(temperature),
         "humidity": float(humidity),
         "location": location,
+        "black_ice_status": black_ice_status,
+        "measured_at": measured_at,
+        "photo_filename": photo_filename,
+        "photo_saved": photo_saved,
+        "photo_error": photo_error,
     }
     total_samples = int(MEASUREMENT_DURATION / MEASUREMENT_INTERVAL)
     ui.send_message("measurement_status", {
@@ -122,10 +262,14 @@ def finalize_measurement_session(total_samples):
         "temperature": measurement_session["temperature"],
         "humidity": measurement_session["humidity"],
         "location": measurement_session["location"],
+        "black_ice_status": measurement_session["black_ice_status"],
+        "photo_filename": measurement_session["photo_filename"],
+        "photo_saved": measurement_session["photo_saved"],
+        "photo_error": measurement_session["photo_error"],
         "samples_taken": len(samples),
         "samples_total": total_samples,
     }
-    save_measurement_result(result)
+    save_measurement_result(result, measurement_session["measured_at"])
     ui.send_message("measurement_result", result)
     ui.send_message("measurement_status", {
         "state": "completed",
@@ -135,13 +279,12 @@ def finalize_measurement_session(total_samples):
     })
 
 
-def save_measurement_result(result):
+def save_measurement_result(result, measured_at):
     """Append measurement result to JSONL file with date/time fields."""
-    now = datetime.now().astimezone()
     record = {
-        "measured_at": now.isoformat(),
-        "date": now.date().isoformat(),
-        "time": now.time().replace(microsecond=0).isoformat(),
+        "measured_at": measured_at.isoformat(),
+        "date": measured_at.date().isoformat(),
+        "time": measured_at.time().replace(microsecond=0).isoformat(),
         "measurement_duration_sec": MEASUREMENT_DURATION,
         "measurement_interval_sec": MEASUREMENT_INTERVAL,
         **result,
@@ -244,9 +387,12 @@ def on_measurement_request(client_id, data):
         temperature = data.get("temperature")
         humidity = data.get("humidity")
         location = data.get("location")
-        if temperature is None or humidity is None or location is None:
-            raise ValueError("missing temperature, humidity, or location")
-        start_measurement_session(temperature, humidity, location)
+        black_ice_status = data.get("black_ice_status")
+        if temperature is None or humidity is None or location is None or black_ice_status is None:
+            raise ValueError("missing temperature, humidity, location, or black_ice_status")
+        if black_ice_status not in ("occurred", "not_occurred"):
+            raise ValueError("invalid black_ice_status")
+        start_measurement_session(temperature, humidity, location, black_ice_status)
     except Exception as e:
         ui.send_message("measurement_status", {
             "state": "error",

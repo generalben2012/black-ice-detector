@@ -21,8 +21,10 @@ const avgLdrEl = document.getElementById('avgLdr');
 const avgTempEl = document.getElementById('avgTemp');
 const avgHumidityEl = document.getElementById('avgHumidity');
 const avgLocationEl = document.getElementById('avgLocation');
+const avgBlackIceEl = document.getElementById('avgBlackIce');
 const measurementDurationLabelEl = document.getElementById('measurementDurationLabel');
-const cameraFeedEl = document.getElementById('cameraFeed');
+const cameraIframeEl = document.getElementById('dynamicIframe');
+const cameraPlaceholderEl = document.getElementById('videoPlaceholder');
 
 // Connection status
 let isConnected = false;
@@ -144,17 +146,45 @@ function initSocketIO() {
 }
 
 function initCamera() {
-    if (!cameraFeedEl || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (!cameraIframeEl) {
         return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then((stream) => {
-            cameraFeedEl.srcObject = stream;
-        })
-        .catch((error) => {
-            console.warn('Camera access failed:', error);
-        });
+    const currentHostname = window.location.hostname;
+    const streamUrl = `http://${currentHostname}:4912/embed`;
+    let intervalId;
+    let retryCount = 0;
+    const maxRetries = 30;
+
+    cameraIframeEl.onload = () => {
+        if (intervalId) {
+            clearInterval(intervalId);
+        }
+        if (cameraPlaceholderEl) {
+            cameraPlaceholderEl.style.display = 'none';
+        }
+        cameraIframeEl.style.display = 'block';
+        retryCount = 0;
+    };
+
+    const startLoading = () => {
+        if (retryCount >= maxRetries) {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            if (cameraPlaceholderEl) {
+                cameraPlaceholderEl.textContent = '카메라를 찾을 수 없습니다. USB 카메라 연결과 앱 재시작을 확인하세요.';
+            }
+            return;
+        }
+        retryCount += 1;
+        if (cameraPlaceholderEl && retryCount > 1) {
+            cameraPlaceholderEl.textContent = `카메라 연결 시도 중... (${retryCount}/${maxRetries})`;
+        }
+        cameraIframeEl.src = streamUrl;
+    };
+
+    intervalId = setInterval(startLoading, 1000);
 }
 
 function updateConfigDisplay(data) {
@@ -172,6 +202,7 @@ function handleMeasurementRequest() {
     const tempValue = parseFloat(temperatureInputEl?.value);
     const humidityValue = parseFloat(humidityInputEl?.value);
     const locationValue = parseInt(locationInputEl?.value, 10);
+    const blackIceSelection = document.querySelector('input[name="blackIceOccurrence"]:checked');
 
     if (Number.isNaN(tempValue) || Number.isNaN(humidityValue) || Number.isNaN(locationValue)) {
         showError('온도, 습도, 위치 번호를 숫자로 입력하세요.');
@@ -183,13 +214,19 @@ function handleMeasurementRequest() {
         return;
     }
 
+    if (!blackIceSelection) {
+        showError('블랙 아이스 발생 여부를 선택하세요.');
+        return;
+    }
+
     clearError();
     setMeasurementBusy(true, '측정 요청 중...');
 
     socket.emit('measurement_request', {
         temperature: tempValue,
         humidity: humidityValue,
-        location: locationValue
+        location: locationValue,
+        black_ice_status: blackIceSelection.value
     });
 }
 
@@ -222,6 +259,7 @@ function updateMeasurementResult(data) {
     const temperature = data.temperature;
     const humidity = data.humidity;
     const location = data.location;
+    const blackIceStatus = data.black_ice_status;
 
     if (typeof distance === 'number' && distance >= 0) {
         avgDistanceEl.textContent = distance.toFixed(2);
@@ -253,6 +291,20 @@ function updateMeasurementResult(data) {
         avgLocationEl.textContent = location;
     } else {
         avgLocationEl.textContent = '--';
+    }
+
+    if (avgBlackIceEl) {
+        avgBlackIceEl.classList.remove('badge', 'badge--danger', 'badge--success', 'badge--neutral');
+        if (blackIceStatus === 'occurred') {
+            avgBlackIceEl.textContent = '발생';
+            avgBlackIceEl.classList.add('badge', 'badge--danger');
+        } else if (blackIceStatus === 'not_occurred') {
+            avgBlackIceEl.textContent = '미발생';
+            avgBlackIceEl.classList.add('badge', 'badge--success');
+        } else {
+            avgBlackIceEl.textContent = '--';
+            avgBlackIceEl.classList.add('badge', 'badge--neutral');
+        }
     }
 
     setMeasurementBusy(false, '측정 완료');

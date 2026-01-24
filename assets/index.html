@@ -59,6 +59,11 @@
                         <span class="result-value" id="avgLocation">---</span>
                         <span class="result-unit"></span>
                     </div>
+                    <div class="result-item">
+                        <span class="result-label">블랙 아이스</span>
+                        <span class="result-value" id="avgBlackIce">---</span>
+                        <span class="result-unit"></span>
+                    </div>
                 </div>
             </div>
 
@@ -77,6 +82,19 @@
                         <label class="input-label" for="locationInput">위치 번호</label>
                         <input id="locationInput" class="input-field" type="number" step="1" placeholder="예: 101">
                     </div>
+                    <div class="input-row">
+                        <span class="input-label">블랙 아이스 발생 여부</span>
+                        <div class="radio-group" role="radiogroup" aria-label="블랙 아이스 발생 여부">
+                            <label class="radio-option">
+                                <input type="radio" name="blackIceOccurrence" value="occurred">
+                                발생
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="blackIceOccurrence" value="not_occurred">
+                                미발생
+                            </label>
+                        </div>
+                    </div>
                     <button id="measureButton" class="primary-button">측정</button>
                     <div class="measurement-status" id="measurementStatus">대기 중</div>
                 </div>
@@ -84,7 +102,8 @@
                 <div class="camera-card">
                     <div class="camera-label">카메라</div>
                     <div class="camera-frame">
-                        <video id="cameraFeed" autoplay playsinline muted></video>
+                        <div id="videoPlaceholder" class="camera-status">카메라 연결 중...</div>
+                        <iframe id="dynamicIframe" title="Camera stream" frameBorder="0" style="display: none;"></iframe>
                     </div>
                 </div>
             </div>

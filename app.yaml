@@ -3,5 +3,7 @@ description: Detect black ice using HC-SR04 ultrasonic sensor and display on web
 ports: []
 bricks:
 - arduino:web_ui: {}
+- arduino:video_object_detection:
+    model: face-detection
 icon: 🧊
 
