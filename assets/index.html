@@ -13,6 +13,10 @@
             <h1>블랙 아이스(Black Ice) 발생 환경 측정기</h1>
             <img class="arduino-logo" src="img/logo.svg" alt="Arduino Logo" style="display: none;">
         </div>
+        <div class="results-link">
+            <a class="results-button" href="results.html" target="_blank" rel="noopener">측정 결과 보기</a>
+            <span class="results-hint">새 탭에서 측정 기록을 확인합니다.</span>
+        </div>
 
         <div class="main-content">
             <div class="top-row">
@@ -80,7 +84,9 @@
                     </div>
                     <div class="input-row">
                         <label class="input-label" for="locationInput">위치 번호</label>
-                        <input id="locationInput" class="input-field" type="number" step="1" placeholder="예: 101">
+                        <select id="locationInput" class="input-field">
+                            <option value="" disabled selected>위치 선택...</option>
+                        </select>
                     </div>
                     <div class="input-row">
                         <span class="input-label">블랙 아이스 발생 여부</span>

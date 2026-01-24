@@ -25,6 +25,7 @@ const avgBlackIceEl = document.getElementById('avgBlackIce');
 const measurementDurationLabelEl = document.getElementById('measurementDurationLabel');
 const cameraIframeEl = document.getElementById('dynamicIframe');
 const cameraPlaceholderEl = document.getElementById('videoPlaceholder');
+const locationSelectEl = document.getElementById('locationInput');
 
 // Connection status
 let isConnected = false;
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSocketIO();
     updateConnectionStatus(false);
     initCamera();
+    loadLocationNames();
 
     if (measureButtonEl) {
         measureButtonEl.addEventListener('click', handleMeasurementRequest);
@@ -75,6 +77,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+function loadLocationNames() {
+    if (!locationSelectEl) {
+        return;
+    }
+    fetch('location_names.json')
+        .then((res) => (res.ok ? res.json() : {}))
+        .then((data) => {
+            const entries = Object.entries(data || {});
+            if (entries.length === 0) {
+                locationSelectEl.innerHTML = '<option value="" disabled selected>위치 정보 없음</option>';
+                return;
+            }
+            const placeholder = '<option value="" disabled selected>위치 선택...</option>';
+            const options = entries
+                .map(([key, value]) => `<option value="${key}">${key}번: ${value}</option>`)
+                .join('');
+            locationSelectEl.innerHTML = placeholder + options;
+        })
+        .catch(() => {
+            locationSelectEl.innerHTML = '<option value="" disabled selected>위치 정보를 불러오지 못했습니다.</option>';
+        });
+}
 
 function initSocketIO() {
     console.log('Initializing Socket.IO connection...');

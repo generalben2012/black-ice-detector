@@ -5,7 +5,7 @@
 from arduino.app_utils import *
 from arduino.app_bricks.web_ui import WebUI
 from arduino.app_bricks.video_objectdetection import VideoObjectDetection
-from base64 import b64decode
+from base64 import b64decode, b64encode
 import json
 import os
 import time
@@ -433,10 +433,67 @@ def on_measurement_request(client_id, data):
             "message": f"측정 시작 실패: {e}",
         })
 
+def read_measurements():
+    if not MEASUREMENTS_PATH.exists():
+        return []
+    items = []
+    try:
+        with MEASUREMENTS_PATH.open("r", encoding="utf-8") as file:
+            for index, line in enumerate(file):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    record["record_id"] = record.get("measured_at") or f"line-{index}"
+                    items.append(record)
+                except json.JSONDecodeError:
+                    continue
+    except Exception as e:
+        print(f"❌ Failed to read measurements: {e}")
+    items.sort(key=lambda x: x.get("measured_at", ""), reverse=True)
+    return items
+
+def on_measurement_list_request(client_id, data):
+    items = read_measurements()
+    summary = []
+    for record in items:
+        summary.append({
+            "record_id": record.get("record_id"),
+            "measured_at": record.get("measured_at"),
+            "location": record.get("location"),
+            "black_ice_status": record.get("black_ice_status"),
+        })
+    ui.send_message("measurement_list", {"items": summary})
+
+def on_measurement_detail_request(client_id, data):
+    record_id = data.get("record_id") if isinstance(data, dict) else None
+    if not record_id:
+        ui.send_message("measurement_detail", {"detail": None})
+        return
+    items = read_measurements()
+    match = next((item for item in items if item.get("record_id") == record_id), None)
+    if not match:
+        ui.send_message("measurement_detail", {"detail": None})
+        return
+    photo_filename = match.get("photo_filename")
+    if photo_filename:
+        photo_path = PHOTO_DIR / photo_filename
+        if photo_path.exists():
+            try:
+                photo_bytes = photo_path.read_bytes()
+                match["photo_data"] = b64encode(photo_bytes).decode("utf-8")
+                match["photo_mime"] = "image/jpeg" if photo_filename.lower().endswith(".jpg") else "image/png"
+            except Exception as e:
+                match["photo_error"] = str(e)
+    ui.send_message("measurement_detail", {"detail": match})
+
 
 # Register WebSocket event handlers
 ui.on_message("client_connected", on_client_connected)
 ui.on_message("measurement_request", on_measurement_request)
+ui.on_message("measurement_list_request", on_measurement_list_request)
+ui.on_message("measurement_detail_request", on_measurement_detail_request)
 
 # Main application loop
 def main_loop():

@@ -1,0 +1,140 @@
+body {
+    background: #dae3e3;
+}
+
+.container {
+    max-width: 1200px;
+}
+
+.results-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+}
+
+.results-list-card,
+.results-detail-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+}
+
+.results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.results-item {
+    border: 1px solid #e5e5e5;
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.results-item:hover {
+    border-color: #1f7a7a;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.results-item.active {
+    border-color: #1f7a7a;
+    background: #f3fbfa;
+}
+
+.results-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 13px;
+    color: #555;
+}
+
+.results-meta strong {
+    color: #222;
+}
+
+.results-status {
+    font-weight: 700;
+}
+
+.results-status.occurred {
+    color: #d64545;
+}
+
+.results-status.not-occurred {
+    color: #2e8b57;
+}
+
+.results-empty {
+    color: #777;
+    font-size: 14px;
+}
+
+.results-detail {
+    font-size: 14px;
+    color: #333;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 24px;
+    margin-bottom: 16px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.detail-label {
+    color: #666;
+    font-size: 12px;
+}
+
+.detail-value {
+    font-weight: 700;
+    font-family: "Roboto Mono", monospace;
+}
+
+.detail-photo {
+    margin-top: 12px;
+}
+
+.detail-photo img {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+.secondary-button {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #cdd7d7;
+    background: #f6f8f8;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.secondary-button:hover {
+    background: #ecefef;
+}
+
+@media (max-width: 900px) {
+    .results-layout {
+        grid-template-columns: 1fr;
+    }
+}
