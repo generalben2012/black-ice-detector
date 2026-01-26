@@ -35,13 +35,374 @@ let measurementDurationSec = null;
 let countdownIntervalId = null;
 let measurementEndTime = null;
 let measurementSamplesInfo = null;
+let distanceStatusMode = 'connecting';
+let cameraStatusMode = 'connecting';
+let cameraRetryState = { retryCount: 0, maxRetries: 0 };
+let measurementStatusState = { mode: 'idle' };
+let currentLang = 'en';
+let locationEntries = null;
+let locationLoadError = false;
 
 // 마지막으로 측정된 유효한 거리 값 저장
 let lastValidDistance = null;
 
+const LANG_STORAGE_KEY = 'bid_lang';
+const DEFAULT_LANG = 'en';
+const I18N = {
+    en: {
+        page_title_main: 'Black Ice Detector',
+        main_title: 'Black Ice Environment Monitor',
+        results_button: 'View Results',
+        results_hint: 'Open measurement history in a new tab.',
+        distance_label: 'Distance',
+        ldr_label: 'Light Sensor (LDR)',
+        result_label_distance: 'Distance',
+        result_label_ldr: 'Light',
+        result_label_temp: 'Temperature',
+        result_label_humidity: 'Humidity',
+        result_label_location: 'Location',
+        result_label_black_ice: 'Black Ice',
+        input_title: 'Manual Input',
+        input_temp_label: 'Temperature (°C)',
+        input_temp_placeholder: 'e.g. 3.5',
+        input_humidity_label: 'Humidity (%)',
+        input_humidity_placeholder: 'e.g. 65',
+        input_location_label: 'Location ID',
+        input_location_placeholder: 'Select location...',
+        input_location_none: 'No location data',
+        input_location_load_fail: 'Failed to load locations.',
+        location_option: 'Location {key}: {name}',
+        input_black_ice_label: 'Black ice occurrence',
+        radio_occurred: 'Occurred',
+        radio_not_occurred: 'Not occurred',
+        measure_button: 'Measure',
+        measure_button_busy: 'Measuring...',
+        measurement_status_idle: 'Idle',
+        measurement_status_requesting: 'Requesting measurement...',
+        measurement_status_measuring: 'Measuring... ({duration})',
+        measurement_status_completed: 'Measurement complete',
+        measurement_status_failed: 'Measurement failed',
+        measurement_status_remaining: '{seconds}s remaining{samples}',
+        measurement_duration_text: '{seconds}s',
+        camera_label: 'Camera',
+        camera_connecting: 'Connecting camera...',
+        camera_not_found: 'Camera not found. Check USB camera and restart the app.',
+        camera_retrying: 'Trying to connect camera... ({retry}/{max})',
+        info_title: 'Sensor Info',
+        info_sensor_model_label: 'Sensor model:',
+        info_measure_range_label: 'Measurement range:',
+        info_update_rate_label: 'Update rate:',
+        connection_connected: 'Connected',
+        connection_connecting: 'Connecting...',
+        connection_disconnected: 'Disconnected',
+        status_normal: 'Measuring normally',
+        status_using_last: 'Measuring... (showing last value)',
+        status_out_of_range: 'Out of measurement range',
+        status_waiting_update: 'Waiting for data update...',
+        status_waiting_update_last: 'Waiting for data update... (showing last value)',
+        error_server_disconnected: 'Server connection lost. Check the connection.',
+        error_prefix: 'Error: ',
+        error_input_numbers: 'Enter temperature, humidity, and location as numbers.',
+        error_humidity_range: 'Humidity must be between 0 and 100.',
+        error_black_ice_required: 'Select black ice occurrence.',
+        black_ice_occurred: 'Occurred',
+        black_ice_not_occurred: 'Not occurred',
+        measurement_result_title: 'Measurement result (avg {seconds}s)'
+    },
+    ko: {
+        page_title_main: 'Black Ice Detector',
+        main_title: '블랙 아이스(Black Ice) 발생 환경 측정기',
+        results_button: '측정 결과 보기',
+        results_hint: '새 탭에서 측정 기록을 확인합니다.',
+        distance_label: '거리',
+        ldr_label: '조도 센서 (LDR)',
+        result_label_distance: '거리',
+        result_label_ldr: '조도',
+        result_label_temp: '온도',
+        result_label_humidity: '습도',
+        result_label_location: '위치',
+        result_label_black_ice: '블랙 아이스',
+        input_title: '수동 입력',
+        input_temp_label: '온도 (°C)',
+        input_temp_placeholder: '예: 3.5',
+        input_humidity_label: '습도 (%)',
+        input_humidity_placeholder: '예: 65',
+        input_location_label: '위치 번호',
+        input_location_placeholder: '위치 선택...',
+        input_location_none: '위치 정보 없음',
+        input_location_load_fail: '위치 정보를 불러오지 못했습니다.',
+        location_option: '{key}번: {name}',
+        input_black_ice_label: '블랙 아이스 발생 여부',
+        radio_occurred: '발생',
+        radio_not_occurred: '미발생',
+        measure_button: '측정',
+        measure_button_busy: '측정 중...',
+        measurement_status_idle: '대기 중',
+        measurement_status_requesting: '측정 요청 중...',
+        measurement_status_measuring: '측정 중... ({duration})',
+        measurement_status_completed: '측정 완료',
+        measurement_status_failed: '측정 실패',
+        measurement_status_remaining: '{seconds}초 남음{samples}',
+        measurement_duration_text: '{seconds}초 소요',
+        camera_label: '카메라',
+        camera_connecting: '카메라 연결 중...',
+        camera_not_found: '카메라를 찾을 수 없습니다. USB 카메라 연결과 앱 재시작을 확인하세요.',
+        camera_retrying: '카메라 연결 시도 중... ({retry}/{max})',
+        info_title: '센서 정보',
+        info_sensor_model_label: '센서 모델:',
+        info_measure_range_label: '측정 범위:',
+        info_update_rate_label: '업데이트 주기:',
+        connection_connected: '연결됨',
+        connection_connecting: '센서 연결 중...',
+        connection_disconnected: '연결 끊김',
+        status_normal: '정상 측정 중',
+        status_using_last: '측정 중... (이전 값 표시)',
+        status_out_of_range: '측정 범위를 벗어났습니다',
+        status_waiting_update: '데이터 업데이트 대기 중...',
+        status_waiting_update_last: '데이터 업데이트 대기 중... (이전 값 표시)',
+        error_server_disconnected: '서버 연결이 끊어졌습니다. 연결을 확인하세요.',
+        error_prefix: '오류: ',
+        error_input_numbers: '온도, 습도, 위치 번호를 숫자로 입력하세요.',
+        error_humidity_range: '습도는 0~100 범위로 입력하세요.',
+        error_black_ice_required: '블랙 아이스 발생 여부를 선택하세요.',
+        black_ice_occurred: '발생',
+        black_ice_not_occurred: '미발생',
+        measurement_result_title: '측정 결과 ({seconds}초 평균)'
+    }
+};
+
+function t(key, params = {}) {
+    const table = I18N[currentLang] || I18N.en;
+    let text = table[key] || I18N.en[key] || key;
+    Object.entries(params).forEach(([paramKey, value]) => {
+        text = text.replaceAll(`{${paramKey}}`, value);
+    });
+    return text;
+}
+
+function getStoredLang() {
+    const stored = localStorage.getItem(LANG_STORAGE_KEY);
+    return stored === 'ko' || stored === 'en' ? stored : DEFAULT_LANG;
+}
+
+function setLanguage(lang, persist = true) {
+    currentLang = lang === 'ko' ? 'ko' : 'en';
+    if (persist) {
+        localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+    }
+    applyTranslations();
+}
+
+function applyTranslations() {
+    document.documentElement.lang = currentLang;
+    document.title = t('page_title_main');
+
+    const mainTitleEl = document.getElementById('mainTitle');
+    if (mainTitleEl) {
+        mainTitleEl.textContent = t('main_title');
+    }
+
+    const resultsButtonEl = document.getElementById('resultsButton');
+    if (resultsButtonEl) {
+        resultsButtonEl.textContent = t('results_button');
+    }
+    const resultsHintEl = document.getElementById('resultsHint');
+    if (resultsHintEl) {
+        resultsHintEl.textContent = t('results_hint');
+    }
+
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+            el.textContent = t(key);
+        }
+    });
+
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key && 'placeholder' in el) {
+            el.placeholder = t(key);
+        }
+    });
+
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-aria');
+        if (key) {
+            el.setAttribute('aria-label', t(key));
+        }
+    });
+
+    updateMeasurementResultTitle();
+    updateMeasureButton();
+    renderMeasurementStatus();
+    applyDistanceStatus();
+    applyCameraStatus();
+    loadLocationNames();
+    updateLangButtons();
+}
+
+function updateLangButtons() {
+    document.querySelectorAll('.lang-button').forEach((btn) => {
+        const lang = btn.dataset.lang;
+        btn.classList.toggle('active', lang === currentLang);
+    });
+}
+
+function initLanguageSwitcher() {
+    setLanguage(getStoredLang(), false);
+    updateLangButtons();
+    document.querySelectorAll('.lang-button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            setLanguage(btn.dataset.lang);
+        });
+    });
+}
+
+function updateMeasurementResultTitle() {
+    const titleEl = document.getElementById('measurementResultTitle');
+    if (!titleEl || !measurementDurationLabelEl) {
+        return;
+    }
+    const seconds = measurementDurationLabelEl.textContent?.trim() || '60';
+    const prefixSuffix = t('measurement_result_title', { seconds: '{seconds}' }).split('{seconds}');
+    const prefix = prefixSuffix[0] || '';
+    const suffix = prefixSuffix[1] || '';
+    measurementDurationLabelEl.textContent = seconds;
+    titleEl.innerHTML = '';
+    titleEl.append(prefix);
+    titleEl.append(measurementDurationLabelEl);
+    titleEl.append(suffix);
+}
+
+function renderLocationOptions() {
+    if (!locationSelectEl) {
+        return;
+    }
+    if (locationLoadError) {
+        locationSelectEl.innerHTML = `<option value="" disabled selected>${t('input_location_load_fail')}</option>`;
+        return;
+    }
+    if (locationEntries == null) {
+        locationSelectEl.innerHTML = `<option value="" disabled selected>${t('input_location_placeholder')}</option>`;
+        return;
+    }
+    if (locationEntries.length === 0) {
+        locationSelectEl.innerHTML = `<option value="" disabled selected>${t('input_location_none')}</option>`;
+        return;
+    }
+    const placeholder = `<option value="" disabled selected>${t('input_location_placeholder')}</option>`;
+    const options = locationEntries
+        .map(([key, value]) => `<option value="${key}">${t('location_option', { key, name: value })}</option>`)
+        .join('');
+    locationSelectEl.innerHTML = placeholder + options;
+}
+
+function updateMeasureButton() {
+    if (measureButtonEl) {
+        measureButtonEl.textContent = isMeasuring ? t('measure_button_busy') : t('measure_button');
+    }
+}
+
+function renderMeasurementStatus() {
+    if (!measurementStatusEl) {
+        return;
+    }
+    const mode = measurementStatusState?.mode || 'idle';
+    if (mode === 'requesting') {
+        measurementStatusEl.textContent = t('measurement_status_requesting');
+    } else if (mode === 'measuring') {
+        const durationSeconds = measurementStatusState.durationSeconds;
+        const duration = typeof durationSeconds === 'number'
+            ? t('measurement_duration_text', { seconds: durationSeconds })
+            : t('measurement_status_measuring', { duration: '' }).replace(' ()', '');
+        measurementStatusEl.textContent = t('measurement_status_measuring', { duration });
+    } else if (mode === 'remaining') {
+        const samples = measurementStatusState.samplesTaken != null && measurementStatusState.samplesTotal != null
+            ? ` (${measurementStatusState.samplesTaken}/${measurementStatusState.samplesTotal})`
+            : '';
+        measurementStatusEl.textContent = t('measurement_status_remaining', {
+            seconds: measurementStatusState.remainingSeconds ?? 0,
+            samples
+        });
+    } else if (mode === 'completed') {
+        measurementStatusEl.textContent = t('measurement_status_completed');
+    } else if (mode === 'error') {
+        measurementStatusEl.textContent = measurementStatusState.message || t('measurement_status_failed');
+    } else {
+        measurementStatusEl.textContent = t('measurement_status_idle');
+    }
+}
+
+function setMeasurementStatusMode(mode, details = {}) {
+    measurementStatusState = { mode, ...details };
+    renderMeasurementStatus();
+}
+
+function applyDistanceStatus() {
+    setDistanceStatus(distanceStatusMode);
+}
+
+function setDistanceStatus(mode) {
+    distanceStatusMode = mode;
+    if (!statusIndicatorEl || !statusTextEl) {
+        return;
+    }
+    if (mode === 'connected') {
+        statusIndicatorEl.className = 'status-indicator active';
+        statusTextEl.textContent = t('connection_connected');
+    } else if (mode === 'connecting') {
+        statusIndicatorEl.className = 'status-indicator warning';
+        statusTextEl.textContent = t('connection_connecting');
+    } else if (mode === 'disconnected') {
+        statusIndicatorEl.className = 'status-indicator error';
+        statusTextEl.textContent = t('connection_disconnected');
+    } else if (mode === 'normal') {
+        statusIndicatorEl.className = 'status-indicator active';
+        statusTextEl.textContent = t('status_normal');
+    } else if (mode === 'using_last') {
+        statusIndicatorEl.className = 'status-indicator warning';
+        statusTextEl.textContent = t('status_using_last');
+    } else if (mode === 'out_of_range') {
+        statusIndicatorEl.className = 'status-indicator error';
+        statusTextEl.textContent = t('status_out_of_range');
+    } else if (mode === 'waiting') {
+        statusIndicatorEl.className = 'status-indicator warning';
+        statusTextEl.textContent = t('status_waiting_update');
+    } else if (mode === 'waiting_with_last') {
+        statusIndicatorEl.className = 'status-indicator warning';
+        statusTextEl.textContent = t('status_waiting_update_last');
+    } else {
+        statusIndicatorEl.className = 'status-indicator warning';
+        statusTextEl.textContent = t('status_waiting_update');
+    }
+}
+
+function setCameraStatus(mode, details = {}) {
+    cameraStatusMode = mode;
+    cameraRetryState = { ...cameraRetryState, ...details };
+    applyCameraStatus();
+}
+
+function applyCameraStatus() {
+    if (!cameraPlaceholderEl) {
+        return;
+    }
+    if (cameraStatusMode === 'not_found') {
+        cameraPlaceholderEl.textContent = t('camera_not_found');
+    } else if (cameraStatusMode === 'retrying') {
+        cameraPlaceholderEl.textContent = t('camera_retrying', {
+            retry: cameraRetryState.retryCount,
+            max: cameraRetryState.maxRetries
+        });
+    } else {
+        cameraPlaceholderEl.textContent = t('camera_connecting');
+    }
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Page loaded, initializing...');
+    initLanguageSwitcher();
     initSocketIO();
     updateConnectionStatus(false);
     initCamera();
@@ -74,9 +435,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const initialDuration = parseInt(measurementDurationLabelEl.textContent, 10);
         if (!Number.isNaN(initialDuration)) {
             measurementDurationSec = initialDuration;
+            updateMeasurementResultTitle();
         }
     }
 });
+
+function resolveLocationData(data) {
+    if (!data) {
+        return null;
+    }
+    if (data.en || data.ko) {
+        return data[currentLang] || data.en || data.ko || {};
+    }
+    return data;
+}
 
 function loadLocationNames() {
     if (!locationSelectEl) {
@@ -85,19 +457,15 @@ function loadLocationNames() {
     fetch('location_names.json')
         .then((res) => (res.ok ? res.json() : {}))
         .then((data) => {
-            const entries = Object.entries(data || {});
-            if (entries.length === 0) {
-                locationSelectEl.innerHTML = '<option value="" disabled selected>위치 정보 없음</option>';
-                return;
-            }
-            const placeholder = '<option value="" disabled selected>위치 선택...</option>';
-            const options = entries
-                .map(([key, value]) => `<option value="${key}">${key}번: ${value}</option>`)
-                .join('');
-            locationSelectEl.innerHTML = placeholder + options;
+            const entries = Object.entries(resolveLocationData(data) || {});
+            locationEntries = entries;
+            locationLoadError = false;
+            renderLocationOptions();
         })
         .catch(() => {
-            locationSelectEl.innerHTML = '<option value="" disabled selected>위치 정보를 불러오지 못했습니다.</option>';
+            locationEntries = [];
+            locationLoadError = true;
+            renderLocationOptions();
         });
 }
 
@@ -130,7 +498,7 @@ function initSocketIO() {
         isConnected = false;
         updateConnectionStatus(false);
         if (errorContainer) {
-            errorContainer.textContent = '서버 연결이 끊어졌습니다. 연결을 확인하세요.';
+            errorContainer.textContent = t('error_server_disconnected');
             errorContainer.style.display = 'block';
         }
     });
@@ -164,7 +532,7 @@ function initSocketIO() {
     socket.on('error', (error) => {
         console.error('Server error:', error);
         if (errorContainer) {
-            errorContainer.textContent = '오류: ' + error;
+            errorContainer.textContent = t('error_prefix') + error;
             errorContainer.style.display = 'block';
         }
     });
@@ -198,13 +566,15 @@ function initCamera() {
                 clearInterval(intervalId);
             }
             if (cameraPlaceholderEl) {
-                cameraPlaceholderEl.textContent = '카메라를 찾을 수 없습니다. USB 카메라 연결과 앱 재시작을 확인하세요.';
+                setCameraStatus('not_found');
             }
             return;
         }
         retryCount += 1;
-        if (cameraPlaceholderEl && retryCount > 1) {
-            cameraPlaceholderEl.textContent = `카메라 연결 시도 중... (${retryCount}/${maxRetries})`;
+        if (retryCount > 1) {
+            setCameraStatus('retrying', { retryCount, maxRetries });
+        } else {
+            setCameraStatus('connecting', { retryCount, maxRetries });
         }
         cameraIframeEl.src = streamUrl;
     };
@@ -216,6 +586,7 @@ function updateConfigDisplay(data) {
     if (measurementDurationLabelEl && typeof data.measurement_duration === 'number') {
         measurementDurationSec = Math.round(data.measurement_duration);
         measurementDurationLabelEl.textContent = measurementDurationSec;
+        updateMeasurementResultTitle();
     }
 }
 
@@ -230,22 +601,23 @@ function handleMeasurementRequest() {
     const blackIceSelection = document.querySelector('input[name="blackIceOccurrence"]:checked');
 
     if (Number.isNaN(tempValue) || Number.isNaN(humidityValue) || Number.isNaN(locationValue)) {
-        showError('온도, 습도, 위치 번호를 숫자로 입력하세요.');
+        showError(t('error_input_numbers'));
         return;
     }
 
     if (humidityValue < 0 || humidityValue > 100) {
-        showError('습도는 0~100 범위로 입력하세요.');
+        showError(t('error_humidity_range'));
         return;
     }
 
     if (!blackIceSelection) {
-        showError('블랙 아이스 발생 여부를 선택하세요.');
+        showError(t('error_black_ice_required'));
         return;
     }
 
     clearError();
-    setMeasurementBusy(true, '측정 요청 중...');
+    setMeasurementBusy(true);
+    setMeasurementStatusMode('requesting');
 
     socket.emit('measurement_request', {
         temperature: tempValue,
@@ -262,19 +634,22 @@ function updateMeasurementStatus(data) {
     const samplesTotal = data.samples_total;
 
     if (state === 'started') {
+        setMeasurementBusy(true);
         const durationText = typeof measurementDurationSec === 'number'
-            ? `${measurementDurationSec}초 소요`
-            : '측정 중...';
-        setMeasurementBusy(true, `측정 중... (${durationText})`);
+            ? t('measurement_duration_text', { seconds: measurementDurationSec })
+            : null;
+        setMeasurementStatusMode('measuring', { durationSeconds: measurementDurationSec, durationText });
         startCountdown(remaining, samplesTaken, samplesTotal);
     } else if (state === 'progress') {
         startCountdown(remaining, samplesTaken, samplesTotal);
     } else if (state === 'completed') {
         stopCountdown();
-        setMeasurementBusy(false, '측정 완료');
+        setMeasurementBusy(false);
+        setMeasurementStatusMode('completed');
     } else if (state === 'error') {
         stopCountdown();
-        setMeasurementBusy(false, data.message || '측정 실패');
+        setMeasurementBusy(false);
+        setMeasurementStatusMode('error', { message: data.message });
     }
 }
 
@@ -321,10 +696,10 @@ function updateMeasurementResult(data) {
     if (avgBlackIceEl) {
         avgBlackIceEl.classList.remove('badge', 'badge--danger', 'badge--success', 'badge--neutral');
         if (blackIceStatus === 'occurred') {
-            avgBlackIceEl.textContent = '발생';
+            avgBlackIceEl.textContent = t('black_ice_occurred');
             avgBlackIceEl.classList.add('badge', 'badge--danger');
         } else if (blackIceStatus === 'not_occurred') {
-            avgBlackIceEl.textContent = '미발생';
+            avgBlackIceEl.textContent = t('black_ice_not_occurred');
             avgBlackIceEl.classList.add('badge', 'badge--success');
         } else {
             avgBlackIceEl.textContent = '--';
@@ -332,7 +707,8 @@ function updateMeasurementResult(data) {
         }
     }
 
-    setMeasurementBusy(false, '측정 완료');
+    setMeasurementBusy(false);
+    setMeasurementStatusMode('completed');
 }
 
 function startCountdown(remainingSeconds, samplesTaken, samplesTotal) {
@@ -354,12 +730,11 @@ function startCountdown(remainingSeconds, samplesTaken, samplesTotal) {
         }
         const remainingMs = Math.max(0, measurementEndTime - Date.now());
         const remainingSec = Math.ceil(remainingMs / 1000);
-        const samplesText = measurementSamplesInfo &&
-            typeof measurementSamplesInfo.samplesTaken === 'number' &&
-            typeof measurementSamplesInfo.samplesTotal === 'number'
-            ? ` (${measurementSamplesInfo.samplesTaken}/${measurementSamplesInfo.samplesTotal})`
-            : '';
-        setMeasurementBusy(true, `${remainingSec}초 남음${samplesText}`);
+        setMeasurementStatusMode('remaining', {
+            remainingSeconds: remainingSec,
+            samplesTaken: measurementSamplesInfo?.samplesTaken,
+            samplesTotal: measurementSamplesInfo?.samplesTotal
+        });
         if (remainingSec <= 0) {
             stopCountdown();
         }
@@ -375,14 +750,11 @@ function stopCountdown() {
     measurementSamplesInfo = null;
 }
 
-function setMeasurementBusy(isBusy, statusText) {
+function setMeasurementBusy(isBusy) {
     isMeasuring = isBusy;
     if (measureButtonEl) {
         measureButtonEl.disabled = isBusy;
-        measureButtonEl.textContent = isBusy ? '측정 중...' : '측정';
-    }
-    if (measurementStatusEl && statusText) {
-        measurementStatusEl.textContent = statusText;
+        updateMeasureButton();
     }
 }
 
@@ -418,22 +790,19 @@ function updateDistanceDisplay(data) {
         distanceValueEl.classList.remove('invalid');
         
         // Update status
-        statusIndicatorEl.className = 'status-indicator active';
-        statusTextEl.textContent = '정상 측정 중';
+        setDistanceStatus('normal');
     } else {
         // 유효하지 않은 값(-1)이 들어왔을 때
         if (lastValidDistance !== null) {
             // 이전에 유효한 값이 있으면 그 값을 유지
             distanceValueEl.textContent = lastValidDistance.toFixed(2);
             distanceValueEl.classList.remove('invalid');
-            statusIndicatorEl.className = 'status-indicator warning';
-            statusTextEl.textContent = '측정 중... (이전 값 표시)';
+            setDistanceStatus('using_last');
         } else {
             // 이전 값이 없으면 -- 표시
             distanceValueEl.textContent = '--';
             distanceValueEl.classList.add('invalid');
-            statusIndicatorEl.className = 'status-indicator error';
-            statusTextEl.textContent = '측정 범위를 벗어났습니다';
+            setDistanceStatus('out_of_range');
         }
     }
 
@@ -454,11 +823,9 @@ function updateDistanceDisplay(data) {
         if (timeSinceUpdate > 2000 && isConnected) {
             if (lastValidDistance !== null) {
                 // 이전 값이 있으면 경고만 표시
-                statusIndicatorEl.className = 'status-indicator warning';
-                statusTextEl.textContent = '데이터 업데이트 대기 중... (이전 값 표시)';
+                setDistanceStatus('waiting_with_last');
             } else {
-                statusIndicatorEl.className = 'status-indicator warning';
-                statusTextEl.textContent = '데이터 업데이트 대기 중...';
+                setDistanceStatus('waiting');
             }
         }
     }, 2000);
@@ -466,11 +833,9 @@ function updateDistanceDisplay(data) {
 
 function updateConnectionStatus(connected) {
     if (connected) {
-        statusIndicatorEl.className = 'status-indicator active';
-        statusTextEl.textContent = '연결됨';
+        setDistanceStatus('connected');
     } else {
-        statusIndicatorEl.className = 'status-indicator error';
-        statusTextEl.textContent = '연결 끊김';
+        setDistanceStatus('disconnected');
         // 연결이 끊겨도 이전 값이 있으면 유지
         if (lastValidDistance !== null) {
             distanceValueEl.textContent = lastValidDistance.toFixed(2);

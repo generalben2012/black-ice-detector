@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,18 +10,26 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>블랙 아이스(Black Ice) 발생 환경 측정기</h1>
-            <img class="arduino-logo" src="img/logo.svg" alt="Arduino Logo" style="display: none;">
+            <div class="header-title">
+                <h1 id="mainTitle">블랙 아이스(Black Ice) 발생 환경 측정기</h1>
+                <img class="arduino-logo" src="img/logo.svg" alt="Arduino Logo" style="display: none;">
+            </div>
+            <div class="header-actions">
+                <div class="lang-switch" role="group" aria-label="Language">
+                    <button class="lang-button" type="button" data-lang="en">EN</button>
+                    <button class="lang-button" type="button" data-lang="ko">KR</button>
+                </div>
+            </div>
         </div>
         <div class="results-link">
-            <a class="results-button" href="results.html" target="_blank" rel="noopener">측정 결과 보기</a>
-            <span class="results-hint">새 탭에서 측정 기록을 확인합니다.</span>
+            <a id="resultsButton" class="results-button" href="results.html" target="_blank" rel="noopener">측정 결과 보기</a>
+            <span id="resultsHint" class="results-hint">새 탭에서 측정 기록을 확인합니다.</span>
         </div>
 
         <div class="main-content">
             <div class="top-row">
                 <div class="distance-card">
-                    <div class="distance-label">거리 (Distance)</div>
+                    <div class="distance-label" data-i18n="distance_label">거리 (Distance)</div>
                     <div class="distance-value" id="distanceValue">---</div>
                     <div class="distance-unit">cm</div>
                     <div class="distance-status" id="distanceStatus">
@@ -31,40 +39,40 @@
                 </div>
 
                 <div class="ldr-card">
-                    <div class="ldr-label">조도 센서 (LDR)</div>
+                    <div class="ldr-label" data-i18n="ldr_label">조도 센서 (LDR)</div>
                     <div class="ldr-value" id="ldrValue">---</div>
                     <div class="ldr-unit">0~1023</div>
                 </div>
 
                 <div class="result-card">
-                    <h3>측정 결과 (<span id="measurementDurationLabel">60</span>초 평균)</h3>
+                    <h3 id="measurementResultTitle">측정 결과 (<span id="measurementDurationLabel">60</span>초 평균)</h3>
                     <div class="result-item">
-                        <span class="result-label">거리</span>
+                        <span class="result-label" data-i18n="result_label_distance">거리</span>
                         <span class="result-value" id="avgDistance">---</span>
                         <span class="result-unit">cm</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">조도</span>
+                        <span class="result-label" data-i18n="result_label_ldr">조도</span>
                         <span class="result-value" id="avgLdr">---</span>
                         <span class="result-unit">0~1023</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">온도</span>
+                        <span class="result-label" data-i18n="result_label_temp">온도</span>
                         <span class="result-value" id="avgTemp">---</span>
                         <span class="result-unit">°C</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">습도</span>
+                        <span class="result-label" data-i18n="result_label_humidity">습도</span>
                         <span class="result-value" id="avgHumidity">---</span>
                         <span class="result-unit">%</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">위치</span>
+                        <span class="result-label" data-i18n="result_label_location">위치</span>
                         <span class="result-value" id="avgLocation">---</span>
                         <span class="result-unit"></span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">블랙 아이스</span>
+                        <span class="result-label" data-i18n="result_label_black_ice">블랙 아이스</span>
                         <span class="result-value" id="avgBlackIce">---</span>
                         <span class="result-unit"></span>
                     </div>
@@ -73,59 +81,59 @@
 
             <div class="second-row">
                 <div class="input-card">
-                    <h3>수동 입력</h3>
+                    <h3 data-i18n="input_title">수동 입력</h3>
                     <div class="input-row">
-                        <label class="input-label" for="temperatureInput">온도 (°C)</label>
-                        <input id="temperatureInput" class="input-field" type="number" step="0.1" placeholder="예: 3.5">
+                        <label class="input-label" for="temperatureInput" data-i18n="input_temp_label">온도 (°C)</label>
+                        <input id="temperatureInput" class="input-field" type="number" step="0.1" placeholder="예: 3.5" data-i18n-placeholder="input_temp_placeholder">
                     </div>
                     <div class="input-row">
-                        <label class="input-label" for="humidityInput">습도 (%)</label>
-                        <input id="humidityInput" class="input-field" type="number" step="0.1" placeholder="예: 65">
+                        <label class="input-label" for="humidityInput" data-i18n="input_humidity_label">습도 (%)</label>
+                        <input id="humidityInput" class="input-field" type="number" step="0.1" placeholder="예: 65" data-i18n-placeholder="input_humidity_placeholder">
                     </div>
                     <div class="input-row">
-                        <label class="input-label" for="locationInput">위치 번호</label>
+                        <label class="input-label" for="locationInput" data-i18n="input_location_label">위치 번호</label>
                         <select id="locationInput" class="input-field">
-                            <option value="" disabled selected>위치 선택...</option>
+                            <option value="" disabled selected data-i18n="input_location_placeholder">위치 선택...</option>
                         </select>
                     </div>
                     <div class="input-row">
-                        <span class="input-label">블랙 아이스 발생 여부</span>
-                        <div class="radio-group" role="radiogroup" aria-label="블랙 아이스 발생 여부">
+                        <span class="input-label" data-i18n="input_black_ice_label">블랙 아이스 발생 여부</span>
+                        <div class="radio-group" role="radiogroup" data-i18n-aria="input_black_ice_label" aria-label="블랙 아이스 발생 여부">
                             <label class="radio-option">
                                 <input type="radio" name="blackIceOccurrence" value="occurred">
-                                발생
+                                <span data-i18n="radio_occurred">발생</span>
                             </label>
                             <label class="radio-option">
                                 <input type="radio" name="blackIceOccurrence" value="not_occurred">
-                                미발생
+                                <span data-i18n="radio_not_occurred">미발생</span>
                             </label>
                         </div>
                     </div>
                     <button id="measureButton" class="primary-button">측정</button>
-                    <div class="measurement-status" id="measurementStatus">대기 중</div>
+                    <div class="measurement-status" id="measurementStatus" data-i18n="measurement_status_idle">대기 중</div>
                 </div>
 
                 <div class="camera-card">
-                    <div class="camera-label">카메라</div>
+                    <div class="camera-label" data-i18n="camera_label">카메라</div>
                     <div class="camera-frame">
-                        <div id="videoPlaceholder" class="camera-status">카메라 연결 중...</div>
+                        <div id="videoPlaceholder" class="camera-status" data-i18n="camera_connecting">카메라 연결 중...</div>
                         <iframe id="dynamicIframe" title="Camera stream" frameBorder="0" style="display: none;"></iframe>
                     </div>
                 </div>
             </div>
 
             <div class="info-card">
-                <h3>센서 정보</h3>
+                <h3 data-i18n="info_title">센서 정보</h3>
                 <div class="info-item">
-                    <span class="info-label">센서 모델:</span>
+                    <span class="info-label" data-i18n="info_sensor_model_label">센서 모델:</span>
                     <span class="info-value">HC-SR04</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">측정 범위:</span>
+                    <span class="info-label" data-i18n="info_measure_range_label">측정 범위:</span>
                     <span class="info-value">2cm ~ 400cm</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">업데이트 주기:</span>
+                    <span class="info-label" data-i18n="info_update_rate_label">업데이트 주기:</span>
                     <span class="info-value">100ms (10회/초)</span>
                 </div>
             </div>

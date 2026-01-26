@@ -34,6 +34,43 @@ body {
     padding: 0 10px;
 }
 
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lang-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    background: #f0f0f0;
+    border-radius: 999px;
+}
+
+.lang-button {
+    border: none;
+    background: transparent;
+    color: #444;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.lang-button.active {
+    background: #008184;
+    color: #fff;
+}
+
 .results-link {
     display: flex;
     align-items: center;
@@ -502,6 +539,15 @@ body {
 
     .header {
         margin-bottom: 20px;
+    }
+
+    .header-title {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-actions {
+        align-self: flex-start;
     }
 
     .arduino-text {
