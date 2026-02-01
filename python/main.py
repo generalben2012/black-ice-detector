@@ -217,7 +217,7 @@ def get_sensor_data():
         return None
 
 
-def start_measurement_session(temperature, humidity, location, black_ice_status):
+def start_measurement_session(temperature, road_surface_temp, humidity, location, black_ice_status):
     """Start a 1-minute averaging session for distance and LDR."""
     global measurement_session
     now = time.time()
@@ -228,6 +228,7 @@ def start_measurement_session(temperature, humidity, location, black_ice_status)
         "next_sample_time": now,
         "samples": [],
         "temperature": float(temperature),
+        "road_surface_temp": float(road_surface_temp),
         "humidity": float(humidity),
         "location": location,
         "black_ice_status": black_ice_status,
@@ -294,6 +295,7 @@ def finalize_measurement_session(total_samples):
         "distance_cm_avg": distance_cm_avg,
         "ldr_avg": ldr_avg,
         "temperature": measurement_session["temperature"],
+        "road_surface_temp": measurement_session["road_surface_temp"],
         "humidity": measurement_session["humidity"],
         "location": measurement_session["location"],
         "black_ice_status": measurement_session["black_ice_status"],
@@ -419,14 +421,15 @@ def on_measurement_request(client_id, data):
     """Handle measurement request from UI."""
     try:
         temperature = data.get("temperature")
+        road_surface_temp = data.get("road_surface_temp")
         humidity = data.get("humidity")
         location = data.get("location")
         black_ice_status = data.get("black_ice_status")
-        if temperature is None or humidity is None or location is None or black_ice_status is None:
-            raise ValueError("missing temperature, humidity, location, or black_ice_status")
+        if temperature is None or road_surface_temp is None or humidity is None or location is None or black_ice_status is None:
+            raise ValueError("missing temperature, road_surface_temp, humidity, location, or black_ice_status")
         if black_ice_status not in ("occurred", "not_occurred"):
             raise ValueError("invalid black_ice_status")
-        start_measurement_session(temperature, humidity, location, black_ice_status)
+        start_measurement_session(temperature, road_surface_temp, humidity, location, black_ice_status)
     except Exception as e:
         ui.send_message("measurement_status", {
             "state": "error",

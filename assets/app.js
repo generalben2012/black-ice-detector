@@ -12,6 +12,7 @@ const statusIndicatorEl = document.getElementById('statusIndicator');
 const statusTextEl = document.getElementById('statusText');
 const ldrValueEl = document.getElementById('ldrValue');
 const temperatureInputEl = document.getElementById('temperatureInput');
+const roadTempInputEl = document.getElementById('roadTempInput');
 const humidityInputEl = document.getElementById('humidityInput');
 const locationInputEl = document.getElementById('locationInput');
 const measureButtonEl = document.getElementById('measureButton');
@@ -19,6 +20,7 @@ const measurementStatusEl = document.getElementById('measurementStatus');
 const avgDistanceEl = document.getElementById('avgDistance');
 const avgLdrEl = document.getElementById('avgLdr');
 const avgTempEl = document.getElementById('avgTemp');
+const avgRoadTempEl = document.getElementById('avgRoadTemp');
 const avgHumidityEl = document.getElementById('avgHumidity');
 const avgLocationEl = document.getElementById('avgLocation');
 const avgBlackIceEl = document.getElementById('avgBlackIce');
@@ -59,12 +61,15 @@ const I18N = {
         result_label_distance: 'Distance',
         result_label_ldr: 'Light',
         result_label_temp: 'Temperature',
+        result_label_road_temp: 'Road surface temp',
         result_label_humidity: 'Humidity',
         result_label_location: 'Location',
         result_label_black_ice: 'Black Ice',
         input_title: 'Manual Input',
         input_temp_label: 'Temperature (°C)',
         input_temp_placeholder: 'e.g. 3.5',
+        input_road_temp_label: 'Road surface temp (°C)',
+        input_road_temp_placeholder: 'e.g. 1.2',
         input_humidity_label: 'Humidity (%)',
         input_humidity_placeholder: 'e.g. 65',
         input_location_label: 'Location ID',
@@ -103,6 +108,7 @@ const I18N = {
         error_server_disconnected: 'Server connection lost. Check the connection.',
         error_prefix: 'Error: ',
         error_input_numbers: 'Enter temperature, humidity, and location as numbers.',
+        error_input_road_temp_numbers: 'Enter road surface temperature as a number.',
         error_humidity_range: 'Humidity must be between 0 and 100.',
         error_black_ice_required: 'Select black ice occurrence.',
         black_ice_occurred: 'Occurred',
@@ -119,12 +125,15 @@ const I18N = {
         result_label_distance: '거리',
         result_label_ldr: '조도',
         result_label_temp: '온도',
+        result_label_road_temp: '도로 표면 온도',
         result_label_humidity: '습도',
         result_label_location: '위치',
         result_label_black_ice: '블랙 아이스',
         input_title: '수동 입력',
         input_temp_label: '온도 (°C)',
         input_temp_placeholder: '예: 3.5',
+        input_road_temp_label: '도로 표면 온도 (°C)',
+        input_road_temp_placeholder: '예: 1.2',
         input_humidity_label: '습도 (%)',
         input_humidity_placeholder: '예: 65',
         input_location_label: '위치 번호',
@@ -163,6 +172,7 @@ const I18N = {
         error_server_disconnected: '서버 연결이 끊어졌습니다. 연결을 확인하세요.',
         error_prefix: '오류: ',
         error_input_numbers: '온도, 습도, 위치 번호를 숫자로 입력하세요.',
+        error_input_road_temp_numbers: '도로 표면 온도를 숫자로 입력하세요.',
         error_humidity_range: '습도는 0~100 범위로 입력하세요.',
         error_black_ice_required: '블랙 아이스 발생 여부를 선택하세요.',
         black_ice_occurred: '발생',
@@ -596,12 +606,18 @@ function handleMeasurementRequest() {
     }
 
     const tempValue = parseFloat(temperatureInputEl?.value);
+    const roadTempValue = parseFloat(roadTempInputEl?.value);
     const humidityValue = parseFloat(humidityInputEl?.value);
     const locationValue = parseInt(locationInputEl?.value, 10);
     const blackIceSelection = document.querySelector('input[name="blackIceOccurrence"]:checked');
 
     if (Number.isNaN(tempValue) || Number.isNaN(humidityValue) || Number.isNaN(locationValue)) {
         showError(t('error_input_numbers'));
+        return;
+    }
+
+    if (Number.isNaN(roadTempValue)) {
+        showError(t('error_input_road_temp_numbers'));
         return;
     }
 
@@ -621,6 +637,7 @@ function handleMeasurementRequest() {
 
     socket.emit('measurement_request', {
         temperature: tempValue,
+        road_surface_temp: roadTempValue,
         humidity: humidityValue,
         location: locationValue,
         black_ice_status: blackIceSelection.value
@@ -657,6 +674,7 @@ function updateMeasurementResult(data) {
     const distance = data.distance_cm_avg;
     const ldr = data.ldr_avg;
     const temperature = data.temperature;
+    const roadSurfaceTemp = data.road_surface_temp;
     const humidity = data.humidity;
     const location = data.location;
     const blackIceStatus = data.black_ice_status;
@@ -677,6 +695,12 @@ function updateMeasurementResult(data) {
         avgTempEl.textContent = temperature.toFixed(1);
     } else {
         avgTempEl.textContent = '--';
+    }
+
+    if (typeof roadSurfaceTemp === 'number' && Number.isFinite(roadSurfaceTemp)) {
+        avgRoadTempEl.textContent = roadSurfaceTemp.toFixed(1);
+    } else if (avgRoadTempEl) {
+        avgRoadTempEl.textContent = '--';
     }
 
     if (typeof humidity === 'number') {

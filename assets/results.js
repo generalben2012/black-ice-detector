@@ -34,6 +34,7 @@ const I18N = {
         detail_location_label: 'Location',
         detail_black_ice_label: 'Black Ice',
         detail_distance_label: 'Distance',
+        detail_road_temp_label: 'Road surface temp',
         detail_light_label: 'Light',
         detail_temp_label: 'Temperature',
         detail_humidity_label: 'Humidity',
@@ -62,6 +63,7 @@ const I18N = {
         detail_location_label: '장소',
         detail_black_ice_label: '블랙 아이스',
         detail_distance_label: '거리',
+        detail_road_temp_label: '도로 표면 온도',
         detail_light_label: '조도',
         detail_temp_label: '온도',
         detail_humidity_label: '습도',
@@ -253,6 +255,7 @@ function renderDetail(detail) {
             <div class="detail-item"><span class="detail-label">${t('detail_distance_label')}</span><span class="detail-value">${formatNumber(detail.distance_cm_avg, 2)} cm</span></div>
             <div class="detail-item"><span class="detail-label">${t('detail_light_label')}</span><span class="detail-value">${formatNumber(detail.ldr_avg, 0)}</span></div>
             <div class="detail-item"><span class="detail-label">${t('detail_temp_label')}</span><span class="detail-value">${formatNumber(detail.temperature, 1)} °C</span></div>
+            <div class="detail-item"><span class="detail-label">${t('detail_road_temp_label')}</span><span class="detail-value">${formatNumber(detail.road_surface_temp, 1)} °C</span></div>
             <div class="detail-item"><span class="detail-label">${t('detail_humidity_label')}</span><span class="detail-value">${formatNumber(detail.humidity, 1)} %</span></div>
             <div class="detail-item"><span class="detail-label">${t('detail_samples_label')}</span><span class="detail-value">${detail.samples_taken ?? '-'} / ${detail.samples_total ?? '-'}</span></div>
         </div>
