@@ -1,2 +1,3 @@
 .cache/
-/python/photos
+/python/photos/backup
+measurements.jsonl.backup
