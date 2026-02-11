@@ -29,6 +29,7 @@ const I18N = {
         list_location_label: 'Location',
         status_occurred: 'Occurred',
         status_not_occurred: 'Not occurred',
+        status_unknown: 'Unknown',
         location_fallback: 'Location {number}',
         detail_time_label: 'Time',
         detail_location_label: 'Location',
@@ -58,6 +59,7 @@ const I18N = {
         list_location_label: '장소',
         status_occurred: '발생',
         status_not_occurred: '미발생',
+        status_unknown: '알 수 없음',
         location_fallback: '위치 {number}',
         detail_time_label: '일시',
         detail_location_label: '장소',
@@ -197,8 +199,16 @@ function renderList(items) {
         const timeText = item.measured_at
             ? new Date(item.measured_at).toLocaleString(currentLang === 'ko' ? 'ko-KR' : 'en-US')
             : '--';
-        const statusText = item.black_ice_status === 'occurred' ? t('status_occurred') : t('status_not_occurred');
-        const statusClass = item.black_ice_status === 'occurred' ? 'occurred' : 'not-occurred';
+        const statusText = item.black_ice_status === 'occurred'
+            ? t('status_occurred')
+            : item.black_ice_status === 'not_occurred'
+                ? t('status_not_occurred')
+                : t('status_unknown');
+        const statusClass = item.black_ice_status === 'occurred'
+            ? 'occurred'
+            : item.black_ice_status === 'not_occurred'
+                ? 'not-occurred'
+                : 'unknown';
 
         listItem.innerHTML = `
             <div class="results-meta">
@@ -238,7 +248,11 @@ function renderDetail(detail) {
         return;
     }
     const locationLabel = locationNames[detail.location] || t('location_fallback', { number: detail.location ?? '-' });
-    const statusText = detail.black_ice_status === 'occurred' ? t('status_occurred') : t('status_not_occurred');
+    const statusText = detail.black_ice_status === 'occurred'
+        ? t('status_occurred')
+        : detail.black_ice_status === 'not_occurred'
+            ? t('status_not_occurred')
+            : t('status_unknown');
     const timeText = detail.measured_at
         ? new Date(detail.measured_at).toLocaleString(currentLang === 'ko' ? 'ko-KR' : 'en-US')
         : '--';

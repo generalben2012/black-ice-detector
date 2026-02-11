@@ -427,7 +427,7 @@ def on_measurement_request(client_id, data):
         black_ice_status = data.get("black_ice_status")
         if temperature is None or road_surface_temp is None or humidity is None or location is None or black_ice_status is None:
             raise ValueError("missing temperature, road_surface_temp, humidity, location, or black_ice_status")
-        if black_ice_status not in ("occurred", "not_occurred"):
+        if black_ice_status not in ("occurred", "not_occurred", "unknown"):
             raise ValueError("invalid black_ice_status")
         start_measurement_session(temperature, road_surface_temp, humidity, location, black_ice_status)
     except Exception as e:

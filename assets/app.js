@@ -80,6 +80,7 @@ const I18N = {
         input_black_ice_label: 'Black ice occurrence',
         radio_occurred: 'Occurred',
         radio_not_occurred: 'Not occurred',
+        radio_unknown: 'Unknown',
         measure_button: 'Measure',
         measure_button_busy: 'Measuring...',
         measurement_status_idle: 'Idle',
@@ -113,6 +114,7 @@ const I18N = {
         error_black_ice_required: 'Select black ice occurrence.',
         black_ice_occurred: 'Occurred',
         black_ice_not_occurred: 'Not occurred',
+        black_ice_unknown: 'Unknown',
         measurement_result_title: 'Measurement result (avg {seconds}s)'
     },
     ko: {
@@ -144,6 +146,7 @@ const I18N = {
         input_black_ice_label: '블랙 아이스 발생 여부',
         radio_occurred: '발생',
         radio_not_occurred: '미발생',
+        radio_unknown: '알 수 없음',
         measure_button: '측정',
         measure_button_busy: '측정 중...',
         measurement_status_idle: '대기 중',
@@ -177,6 +180,7 @@ const I18N = {
         error_black_ice_required: '블랙 아이스 발생 여부를 선택하세요.',
         black_ice_occurred: '발생',
         black_ice_not_occurred: '미발생',
+        black_ice_unknown: '알 수 없음',
         measurement_result_title: '측정 결과 ({seconds}초 평균)'
     }
 };
@@ -725,6 +729,9 @@ function updateMeasurementResult(data) {
         } else if (blackIceStatus === 'not_occurred') {
             avgBlackIceEl.textContent = t('black_ice_not_occurred');
             avgBlackIceEl.classList.add('badge', 'badge--success');
+        } else if (blackIceStatus === 'unknown') {
+            avgBlackIceEl.textContent = t('black_ice_unknown');
+            avgBlackIceEl.classList.add('badge', 'badge--neutral');
         } else {
             avgBlackIceEl.textContent = '--';
             avgBlackIceEl.classList.add('badge', 'badge--neutral');

@@ -77,6 +77,10 @@ body {
     color: #2e8b57;
 }
 
+.results-status.unknown {
+    color: #666;
+}
+
 .results-empty {
     color: #777;
     font-size: 14px;
