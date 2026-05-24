@@ -2,8 +2,8 @@ import json
 import csv
 from pathlib import Path
 
-jsonl_file = Path('/mnt/c/proprojet/black-ice-detector/python/measurements.jsonl')
-csv_file = Path('/mnt/c/proprojet/black-ice-detector/python/measurements.csv')
+jsonl_file = Path(__file__).parent / 'measurements.jsonl'
+csv_file = Path(__file__).parent / 'measurements.csv'
 
 def convert():
     if not jsonl_file.exists():
